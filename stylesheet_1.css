@@ -22,7 +22,7 @@ a {
   }
   .container {
     position: relative;
-    margin-top: 125px;
+    margin-top: 115px;
   }
   .carousel-inner {
         margin-bottom: 60px;
@@ -76,6 +76,9 @@ ul
 ul li 
 {
   list-style: none;
+  padding-left: 15px;
+  padding-bottom: 15px;
+  text-align: center;
 }
 ul li a 
 {
@@ -140,4 +143,7 @@ ul li a span:nth-child(3)
 {
   color: white;
   background: black;
+}
+.navlink {
+  padding-left: 100px;
 }
