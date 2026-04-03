@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meriaikataulu ETA / ETD</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@500;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #0d1b2e;
+    --bg-dark:      #091220;
+    --bg-header:    #0a1525;
+    --bg-alt:       #0f2035;
+    --bg-next:      #162d50;
+    --bg-col-hdr:   #0d1e30;
+    --blue:         #7eb8f7;
+    --green:        #4dd88a;
+    --amber:        #ffe066;
+    --muted:        #5a8ab8;
+    --dim:          #2a4a6a;
+    --border:       #1e3a5f;
+    --border-light: #142338;
+    --bar:          #3a8aff;
+    --white:        #ffffff;
+    --light:        #d0e4f8;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Barlow', sans-serif;
+    font-size: 16px;
+    overflow: hidden;
+  }
+
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg-header);
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #topbar .anchor { font-size: 22px; }
+  #topbar h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  #topbar .sub { font-size: clamp(11px, 1vw, 13px); color: var(--muted); }
+  #topbar .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  #timestamp { font-size: clamp(11px, 1vw, 13px); color: var(--blue); }
+  #refresh-btn {
+    background: #162d50;
+    color: var(--blue);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 18px;
+    font-family: 'Barlow', sans-serif;
+    font-size: clamp(12px, 1vw, 14px);
+    cursor: pointer;
+    transition: background .15s;
+  }
+  #refresh-btn:hover { background: var(--border); }
+
+  #main {
+    display: flex;
+    height: calc(100vh - 48px - 38px);
+  }
+
+  .panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-title.arr { background: #0f2a18; }
+  .panel-title.dep { background: #0f1e35; }
+  .panel-title span {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(14px, 1.5vw, 18px);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .panel-title.arr span { color: var(--green); }
+  .panel-title.dep span { color: var(--blue); }
+
+  /* ── Sarakkeet: 4px | Alus | Reitti | Laituri | Matkustajia | Aika ── */
+  .col-hdr {
+    display: grid;
+    grid-template-columns: 4px 1fr 1.3fr 1fr 90px auto;
+    background: var(--bg-col-hdr);
+    border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
+  }
+  .col-hdr .ch {
+    padding: 6px 8px;
+    font-size: clamp(10px, 0.85vw, 12px);
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .col-hdr .ch.time-hdr { text-align: right; padding-right: 20px; min-width: 120px; }
+  .col-hdr .ch.pax-hdr  { text-align: right; padding-right: 8px; }
+
+  .rows { flex: 1; overflow: hidden; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 4px 1fr 1.3fr 1fr 90px auto;
+    border-bottom: 1px solid var(--border-light);
+    align-items: center;
+  }
+  .row.alt      { background: var(--bg-alt); }
+  .row.next     { background: #d6eaff; }
+  .row.empty-row{ background: var(--bg-dark); }
+
+  .row-bar { align-self: stretch; width: 4px; }
+  .row.next .row-bar      { background: transparent; }
+  .row:not(.next) .row-bar{ background: transparent; }
+
+  .cell {
+    padding: 0 8px;
+    font-size: clamp(13px, 1.1vw, 16px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1;
+  }
+  .cell-name {
+    font-weight: 700;
+    color: var(--white);
+    font-size: clamp(14px, 1.2vw, 17px);
+  }
+  /* Reitti: LÄHTÖ → KOHDE */
+  .cell-route {
+    color: var(--light);
+    font-size: clamp(12px, 1vw, 15px);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cell-route .from { color: var(--light); }
+  .cell-route .arrow{ color: var(--muted); font-size: 0.85em; }
+  .cell-route .to   { color: var(--blue); font-weight: 600; }
+  .cell-berth { color: var(--muted); }
+  .cell-time {
+    color: var(--blue);
+    font-weight: 700;
+    font-size: clamp(14px, 1.2vw, 17px);
+    text-align: right;
+    padding-right: 20px;
+    min-width: 120px;
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.5px;
+  }
+  .cell-pax {
+    color: var(--green);
+    font-size: clamp(12px, 1vw, 15px);
+    text-align: right;
+    padding-right: 8px;
+    white-space: nowrap;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+  }
+  .cell.empty { color: var(--dim); }
+
+  /* Korostettu rivi (vaalainen) */
+  .row.next .cell-name  { color: #0a2540; font-size: clamp(15px, 1.4vw, 19px); }
+  .row.next .cell-route .from { color: #1a3a5c; }
+  .row.next .cell-route .arrow{ color: #2a5a8c; }
+  .row.next .cell-route .to   { color: #0a5aaa; font-weight: 700; }
+  .row.next .cell-berth { color: #2a5a8c; }
+  .row.next .cell-time  { color: #0a5aaa; font-size: clamp(15px, 1.4vw, 19px); }
+  .row.next .cell-pax   { color: #1a6a3a; }
+
+  /* ── Ticker ── */
+  #ticker {
+    height: 38px;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+    padding: 0 24px;
+    overflow: hidden;
+  }
+  #ticker-clock {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(16px, 1.6vw, 22px);
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 2px;
+    min-width: 90px;
+    flex-shrink: 0;
+  }
+  .ticker-sep { width: 1px; height: 20px; background: var(--border); margin: 0 20px; flex-shrink: 0; }
+  .ticker-item { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .ticker-label { font-size: clamp(10px, 0.85vw, 12px); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+  .ticker-name  { font-size: clamp(13px, 1.1vw, 16px); font-weight: 700; color: var(--white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ticker-countdown { font-family: 'Barlow Condensed', sans-serif; font-size: clamp(14px, 1.3vw, 18px); font-weight: 700; white-space: nowrap; flex-shrink: 0; margin-left: 6px; }
+  .ticker-countdown.soon  { color: var(--amber); }
+  .ticker-countdown.later { color: var(--blue); }
+  .ticker-countdown.past  { color: var(--muted); }
+
+  .error-msg { grid-column: 2 / 7; padding: 12px 8px; color: #f07070; font-size: clamp(12px, 1vw, 14px); }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="anchor">⚓</span>
+  <h1>Meriaikataulu</h1>
+  <span class="sub">Arvioidut saapumis- ja lähtöajat</span>
+  <div class="right">
+    <span id="timestamp">Ladataan…</span>
+    <button id="refresh-btn" onclick="fetchData()">Päivitä</button>
+  </div>
+</div>
+
+<div id="main">
+  <div class="panel" id="panel-arr">
+    <div class="panel-title arr"><span>▼ &nbsp;Saapuvat</span></div>
+    <div class="col-hdr">
+      <div></div>
+      <div class="ch">Alus</div>
+      <div class="ch">Reitti</div>
+      <div class="ch">Laituri</div>
+      <div class="ch pax-hdr">Matkustajia</div>
+      <div class="ch time-hdr">ETA</div>
+    </div>
+    <div class="rows" id="rows-arr"></div>
+  </div>
+
+  <div class="panel" id="panel-dep">
+    <div class="panel-title dep"><span>▶ &nbsp;Lähtevät</span></div>
+    <div class="col-hdr">
+      <div></div>
+      <div class="ch">Alus</div>
+      <div class="ch">Reitti</div>
+      <div class="ch">Laituri</div>
+      <div class="ch pax-hdr">Matkustajia</div>
+      <div class="ch time-hdr">ETD</div>
+    </div>
+    <div class="rows" id="rows-dep"></div>
+  </div>
+</div>
+
+<div id="ticker">
+  <span id="ticker-clock">00:00:00</span>
+  <div class="ticker-sep"></div>
+  <div class="ticker-item">
+    <span class="ticker-label">Seuraava saapuva</span>
+    <span class="ticker-name" id="ticker-arr-name">—</span>
+    <span class="ticker-countdown" id="ticker-arr-cd"></span>
+  </div>
+  <div class="ticker-sep"></div>
+  <div class="ticker-item">
+    <span class="ticker-label">Seuraava lähtevä</span>
+    <span class="ticker-name" id="ticker-dep-name">—</span>
+    <span class="ticker-countdown" id="ticker-dep-cd"></span>
+  </div>
+</div>
+
+<script>
+// ── Alukset ja kapasiteetit ───────────────────────────────────────────────────
+const SHIPS_RAW = [
+  "MYSTAR,2800","MEGASTAR,2800","FINLANDIA,2080","VIKING GLORY,2800",
+  "VIKING XPRS,2500","VIKING GRACE,2800","SILJA SYMPHONY,2852",
+  "SILJA SERENADE,2852","VIKING CINDERELLA,2560","BALTIC PRINCESS,2800",
+  "GABRIELLA,2420","BALTIC QUEEN,2800","ECKERÖ,1500","VICTORIA I,2500",
+  "BIRKA GOTLAND,1800","FINNCANOPUS,1100","FINNSIRIUS,1100",
+  "AURORA BOTNIA,935","FINNMAID,554","FINNSTAR,554","FINNLADY,554",
+  "SUPERFAST IX,550","FINBO CARGO,366","SAMPO,104","ARKTIS,106",
+];
+
+const SHIPS = [], CAPACITY = {};
+for (const line of SHIPS_RAW) {
+  const [name, cap] = line.split(',');
+  const u = name.trim().toUpperCase();
+  SHIPS.push(u);
+  if (cap) CAPACITY[u] = parseInt(cap, 10);
+}
+
+const WINDOW_H  = 12;
+const REFRESH_MS = 600_000;
+let refreshTimer = null;
+let _nextArr = null, _nextDep = null;
+
+function fmtDt(date) {
+  const d   = String(date.getDate()).padStart(2,'0');
+  const m   = String(date.getMonth()+1).padStart(2,'0');
+  const h   = String(date.getHours()).padStart(2,'0');
+  const min = String(date.getMinutes()).padStart(2,'0');
+  return `${d}.${m} ${h}:${min}`;
+}
+
+function occupancyColor(paxCount, vesselName) {
+  const cap = CAPACITY[vesselName.toUpperCase()];
+  if (!cap || !paxCount || paxCount <= 0) return null;
+  const pct = Math.min(paxCount / cap, 1.0);
+  if (pct >= 0.75) return { color:'#e05555', bg:'#2a1010', pct };
+  if (pct >= 0.35) return { color:'#e0c040', bg:'#2a2010', pct };
+  return { color:'#4dd88a', bg:'#0f2a18', pct };
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Reitti-solu: FROM → TO ────────────────────────────────────────────────────
+function routeCell(from, to, isNext) {
+  const fc = isNext ? '#1a3a5c' : 'var(--light)';
+  const ac = isNext ? '#2a5a8c' : 'var(--muted)';
+  const tc = isNext ? '#0a5aaa' : 'var(--blue)';
+  return `<div class="cell cell-route">
+    <span class="from" style="color:${fc}">${esc(from)}</span>
+    <span class="arrow" style="color:${ac}">→</span>
+    <span class="to"   style="color:${tc}">${esc(to)}</span>
+  </div>`;
+}
+
+// ── Rivien piirtäminen ────────────────────────────────────────────────────────
+function renderRows(containerId, rows, nextIdx) {
+  const container = document.getElementById(containerId);
+  const rowH = 42;
+  const visCount = Math.max(1, Math.floor(container.clientHeight / rowH));
+  const half   = Math.floor(visCount / 2);
+  const n      = rows.length;
+  const offset = ((nextIdx - half) % n + n) % n;
+
+  let html = '';
+  for (let i = 0; i < visCount; i++) {
+    const dataIdx = (offset + i) % n;
+    const r       = rows[dataIdx];
+    const isNext  = dataIdx === nextIdx;
+    const isEmpty = r.empty;
+
+    let cls = 'row';
+    if (isEmpty)       cls += ' empty-row';
+    else if (isNext)   cls += ' next';
+    else if (i % 2)   cls += ' alt';
+
+    if (isEmpty) {
+      html += `<div class="${cls}" style="height:${rowH}px">
+        <div class="row-bar"></div>
+        <div class="cell empty">—</div>
+        <div class="cell empty">—</div>
+        <div class="cell empty">—</div>
+        <div class="cell cell-pax empty">—</div>
+        <div class="cell cell-time empty">—</div>
+      </div>`;
+    } else {
+      const occ = occupancyColor(r.rawPax || 0, r.name);
+      const paxStyle = occ
+        ? `style="color:${occ.color};background:${occ.bg};padding:2px 8px 2px 6px;border-radius:4px;"`
+        : '';
+      const paxLabel = occ
+        ? `${r.pax} <span style="font-size:0.8em;opacity:0.8">(${Math.round(occ.pct*100)}%)</span>`
+        : esc(r.pax);
+
+      html += `<div class="${cls}" style="height:${rowH}px">
+        <div class="row-bar"></div>
+        <div class="cell cell-name">${esc(r.name)}</div>
+        ${routeCell(r.from, r.to, isNext)}
+        <div class="cell cell-berth">${esc(r.berth)}</div>
+        <div class="cell cell-pax" ${paxStyle}>${paxLabel}</div>
+        <div class="cell cell-time">${esc(r.time)}</div>
+      </div>`;
+    }
+  }
+  container.innerHTML = html;
+}
+
+// ── Virheviesti ───────────────────────────────────────────────────────────────
+function showError(msg) {
+  ['rows-arr','rows-dep'].forEach(id => {
+    document.getElementById(id).innerHTML =
+      `<div class="row" style="height:48px">
+         <div class="row-bar"></div>
+         <div class="error-msg">${esc(msg)}</div>
+       </div>`;
+  });
+  document.getElementById('timestamp').textContent =
+    `Päivitys epäonnistui: ${fmtDt(new Date())}`;
+}
+
+// ── API-haku ──────────────────────────────────────────────────────────────────
+async function fetchData() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  const now    = new Date();
+  const shipSet = new Set(SHIPS.map(s => s.toUpperCase()));
+
+  let data;
+  try {
+    const resp = await fetch(
+      'https://meri.digitraffic.fi/api/port-call/v1/port-calls',
+      { headers: { 'Digitraffic-User': 'Meriaikataulu/1.0' } }
+    );
+    if (!resp.ok) {
+      showError(`Palvelin palautti virheen (HTTP ${resp.status}) — yritetään uudelleen 10 min kuluttua`);
+      refreshTimer = setTimeout(fetchData, REFRESH_MS);
+      return;
+    }
+    data = await resp.json();
+  } catch (e) {
+    showError(navigator.onLine
+      ? 'Tiedonhaku epäonnistui — yritetään uudelleen 10 min kuluttua'
+      : 'Ei verkkoyhteyttä — tarkista internetyhteys');
+    refreshTimer = setTimeout(fetchData, REFRESH_MS);
+    return;
+  }
+
+  const arrivals = [], departures = [];
+
+  for (const pc of (data.portCalls || [])) {
+    try {
+      const vname = (pc.vesselName || '').toUpperCase();
+      if (shipSet.size > 0 && !shipSet.has(vname)) continue;
+
+      const detail   = (pc.portAreaDetails || [{}])[0];
+      const prevPort = pc.prevPort     || '—';
+      const ptv      = pc.portToVisit  || '—';
+      const nextPort = pc.nextPort     || '—';
+      const berth    = detail.berthName || detail.berthCode || '—';
+
+      const imoInfo   = pc.imoInformation || [];
+      const imoArr    = imoInfo.find(i => i.imoGeneralDeclaration === 'Arrival');
+      const imoDep    = imoInfo.find(i => i.imoGeneralDeclaration === 'Departure');
+      const rawPaxArr = (imoArr && imoArr.numberOfPassangers > 0) ? imoArr.numberOfPassangers : 0;
+      const rawPaxDep = (imoDep && imoDep.numberOfPassangers > 0) ? imoDep.numberOfPassangers : 0;
+      const paxArr    = rawPaxArr > 0 ? rawPaxArr.toLocaleString('fi-FI') : '—';
+      const paxDep    = rawPaxDep > 0 ? rawPaxDep.toLocaleString('fi-FI') : '—';
+
+      if (detail.eta) {
+        const dt = new Date(detail.eta);
+        if ((dt - now) / 3_600_000 >= -WINDOW_H && (dt - now) / 3_600_000 <= WINDOW_H) {
+          // Saapuvat: reitti = LÄHTÖSATAMA → KÄYNTISATAMA
+          arrivals.push({ dt, name: pc.vesselName,
+            from: prevPort, to: ptv,
+            berth, pax: paxArr, rawPax: rawPaxArr, time: fmtDt(dt) });
+        }
+      }
+      if (detail.etd) {
+        const dt = new Date(detail.etd);
+        if ((dt - now) / 3_600_000 >= -WINDOW_H && (dt - now) / 3_600_000 <= WINDOW_H) {
+          // Lähtevät: reitti = KÄYNTISATAMA → KOHDESATAMA
+          departures.push({ dt, name: pc.vesselName,
+            from: ptv, to: nextPort,
+            berth, pax: paxDep, rawPax: rawPaxDep, time: fmtDt(dt) });
+        }
+      }
+    } catch (_) { continue; }
+  }
+
+  arrivals.sort((a,b) => a.dt - b.dt);
+  departures.sort((a,b) => a.dt - b.dt);
+
+  function nextIndex(rows) {
+    for (let i = 0; i < rows.length; i++) if (rows[i].dt > now) return i;
+    return Math.max(0, rows.length - 1);
+  }
+  function pad(rows) {
+    return rows.length > 0 ? rows
+      : Array(8).fill({ name:'—', from:'—', to:'—', berth:'—', pax:'—', rawPax:0, time:'—', empty:true });
+  }
+
+  const arrRows = pad(arrivals), depRows = pad(departures);
+  const arrNext = arrivals.length  ? nextIndex(arrivals)   : 0;
+  const depNext = departures.length? nextIndex(departures) : 0;
+
+  renderRows('rows-arr', arrRows, arrNext);
+  renderRows('rows-dep', depRows, depNext);
+
+  const ni = arrivals.findIndex(r => r.dt > now);
+  const di = departures.findIndex(r => r.dt > now);
+  _nextArr = ni >= 0 ? arrivals[ni]   : arrivals.length   ? arrivals[arrivals.length-1]     : null;
+  _nextDep = di >= 0 ? departures[di] : departures.length ? departures[departures.length-1] : null;
+
+  document.getElementById('timestamp').textContent =
+    `Päivitetty portnetistä: ${fmtDt(now)}`;
+
+  refreshTimer = setTimeout(fetchData, REFRESH_MS);
+}
+
+// ── Ticker: kello + countdown ─────────────────────────────────────────────────
+function fmtCountdown(dt) {
+  const diffMs  = dt - new Date();
+  const diffMin = Math.round(diffMs / 60_000);
+  const diffH   = diffMs / 3_600_000;
+  if (diffMs < 0) {
+    const ago = Math.round(-diffMs / 60_000);
+    return { text: ago < 60 ? `${ago} min sitten` : `${Math.round(-diffH)} h sitten`, cls: 'past' };
+  }
+  if (diffMin < 60) return { text: `${diffMin} min`, cls: diffMin <= 15 ? 'soon' : 'later' };
+  const h = Math.floor(diffH), m = Math.round((diffH - h) * 60);
+  return { text: m > 0 ? `${h} h ${m} min` : `${h} h`, cls: 'later' };
+}
+
+function updateTicker() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const ss = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('ticker-clock').textContent = `${hh}:${mm}:${ss}`;
+
+  for (const [r, nameId, cdId] of [
+    [_nextArr, 'ticker-arr-name', 'ticker-arr-cd'],
+    [_nextDep, 'ticker-dep-name', 'ticker-dep-cd'],
+  ]) {
+    if (r) {
+      const cd = fmtCountdown(r.dt);
+      document.getElementById(nameId).textContent = r.name;
+      const el = document.getElementById(cdId);
+      el.textContent = cd.text;
+      el.className = `ticker-countdown ${cd.cls}`;
+    } else {
+      document.getElementById(nameId).textContent = 'Ei tietoa';
+      document.getElementById(cdId).textContent = '';
+    }
+  }
+}
+
+fetchData();
+setInterval(updateTicker, 1000);
+updateTicker();
+
+window.addEventListener('resize', () => {
+  clearTimeout(window._resizeTimer);
+  window._resizeTimer = setTimeout(fetchData, 200);
+});
+</script>
+</body>
+</html>
