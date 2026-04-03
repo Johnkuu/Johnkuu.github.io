@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meriaikataulu</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0d1b2e;--bg-dark:#091220;--bg-hdr:#0a1525;--bg-alt:#0f2035;
+  --bg-col:#0d1e30;--blue:#7eb8f7;--green:#4dd88a;--amber:#ffe066;
+  --muted:#5a8ab8;--dim:#2a4a6a;--border:#1e3a5f;--bl:#142338;
+  --white:#ffffff;--light:#d0e4f8;
+}
+
+html,body{height:100%;background:var(--bg);color:var(--white);
+  font-family:'Barlow',sans-serif;font-size:16px;overflow:hidden}
+
+#topbar{display:flex;align-items:center;gap:12px;background:var(--bg-hdr);
+  padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+#topbar .anchor{font-size:20px}
+#topbar h1{font-family:'Barlow Condensed',sans-serif;
+  font-size:clamp(15px,2vw,24px);font-weight:700;letter-spacing:1px;text-transform:uppercase}
+#topbar .sub{font-size:clamp(10px,1vw,13px);color:var(--muted)}
+#topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+#timestamp{font-size:clamp(10px,1vw,13px);color:var(--blue)}
+#refresh-btn{background:#162d50;color:var(--blue);border:1px solid var(--border);
+  border-radius:6px;padding:5px 14px;font-family:'Barlow',sans-serif;
+  font-size:clamp(11px,1vw,13px);cursor:pointer;white-space:nowrap}
+#refresh-btn:hover{background:var(--border)}
+
+#tabs{display:none;flex-shrink:0;background:var(--bg-hdr);
+  border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;
+  letter-spacing:1px;text-transform:uppercase;color:var(--muted);
+  border-bottom:3px solid transparent;transition:color .15s,border-color .15s}
+.tab.active-arr{color:var(--green);border-color:var(--green)}
+.tab.active-dep{color:var(--blue);border-color:var(--blue)}
+
+#main{display:flex;overflow:hidden;height:calc(100vh - 48px - 38px)}
+
+.panel{flex:1;display:flex;flex-direction:column;
+  border-right:1px solid var(--border);overflow:hidden;min-width:0}
+.panel:last-child{border-right:none}
+
+.panel-title{display:flex;align-items:center;gap:8px;
+  padding:7px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.panel-title.arr{background:#0f2a18}
+.panel-title.dep{background:#0f1e35}
+.panel-title span{font-family:'Barlow Condensed',sans-serif;
+  font-size:clamp(13px,1.4vw,17px);font-weight:700;letter-spacing:2px;text-transform:uppercase}
+.panel-title.arr span{color:var(--green)}
+.panel-title.dep span{color:var(--blue)}
+
+.col-hdr,.row{display:grid;grid-template-columns:4px 1fr 1.2fr 0.9fr 80px auto;align-items:center}
+.col-hdr{background:var(--bg-col);border-bottom:1px solid var(--bl);flex-shrink:0}
+.ch{padding:5px 6px;font-size:clamp(9px,0.8vw,11px);font-weight:700;
+  color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.ch.time-hdr{text-align:right;padding-right:16px;min-width:105px}
+.ch.pax-hdr{text-align:right;padding-right:6px}
+
+.rows{flex:1;overflow:hidden}
+.row{border-bottom:1px solid var(--bl)}
+.row.alt{background:var(--bg-alt)}
+.row.next{background:#d6eaff}
+.row.empty-row{background:var(--bg-dark)}
+.row-bar{align-self:stretch;width:4px}
+
+.cell{padding:0 6px;font-size:clamp(12px,1vw,15px);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
+.cell-name{font-weight:700;color:var(--white);font-size:clamp(13px,1.1vw,16px)}
+.cell-route{color:var(--light);font-size:clamp(11px,.95vw,14px);
+  display:flex;align-items:center;gap:3px}
+.cell-route .from{color:var(--light)}
+.cell-route .arrow{color:var(--muted);font-size:.85em}
+.cell-route .to{color:var(--blue);font-weight:600}
+.cell-berth{color:var(--muted)}
+.cell-time{color:var(--blue);font-weight:700;font-size:clamp(13px,1.1vw,16px);
+  text-align:right;padding-right:16px;min-width:105px;
+  font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px}
+.cell-pax{color:var(--green);font-size:clamp(11px,.9vw,14px);text-align:right;
+  padding-right:6px;white-space:nowrap;font-family:'Barlow Condensed',sans-serif;font-weight:600}
+.cell.empty{color:var(--dim)}
+
+.row.next .cell-name{color:#0a2540;font-size:clamp(14px,1.3vw,18px)}
+.row.next .cell-route .from{color:#1a3a5c}
+.row.next .cell-route .arrow{color:#2a5a8c}
+.row.next .cell-route .to{color:#0a5aaa;font-weight:700}
+.row.next .cell-berth{color:#2a5a8c}
+.row.next .cell-time{color:#0a5aaa;font-size:clamp(14px,1.3vw,18px)}
+.row.next .cell-pax{color:#1a6a3a}
+
+#ticker{height:38px;background:var(--bg-dark);border-top:1px solid var(--border);
+  display:flex;align-items:center;flex-shrink:0;padding:0 16px;overflow:hidden}
+#disclaimer{font-size:clamp(9px,0.75vw,11px);color:var(--dim);white-space:nowrap;
+  flex-shrink:0;margin-left:auto;padding-left:16px;font-style:italic}
+#ticker-clock{font-family:'Barlow Condensed',sans-serif;font-size:clamp(15px,1.5vw,20px);
+  font-weight:700;color:var(--white);letter-spacing:2px;min-width:80px;flex-shrink:0}
+.tsep{width:1px;height:18px;background:var(--border);margin:0 14px;flex-shrink:0}
+.titem{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+.tlbl{font-size:clamp(9px,0.8vw,11px);color:var(--muted);text-transform:uppercase;
+  letter-spacing:.5px;white-space:nowrap;flex-shrink:0}
+.tname{font-size:clamp(12px,1vw,15px);font-weight:700;color:var(--white);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcd{font-family:'Barlow Condensed',sans-serif;font-size:clamp(13px,1.2vw,17px);
+  font-weight:700;white-space:nowrap;flex-shrink:0;margin-left:4px}
+.tcd.soon{color:var(--amber)}.tcd.later{color:var(--blue)}.tcd.past{color:var(--muted)}
+
+.error-msg{grid-column:2/7;padding:10px 6px;color:#f07070;font-size:clamp(11px,.9vw,13px)}
+
+@media(max-width:900px){
+  html,body{overflow:auto}
+  #main{flex-direction:column;height:auto;overflow:visible}
+  .panel{flex:none;border-right:none;border-bottom:1px solid var(--border)}
+  .panel:last-child{border-bottom:none}
+  #ticker{display:none}
+  #main{height:calc(100vh - 48px)}
+  #disclaimer{display:none}
+}
+@media(max-width:900px){
+  .col-hdr,.row{grid-template-columns:4px 1fr 1.2fr 80px auto}
+  .col-hdr .ch-berth,.row .cell-berth{display:none}
+}
+@media(max-width:600px){
+  html,body{overflow:hidden}
+  #topbar .sub{display:none}
+  #tabs{display:flex}
+  #main{height:calc(100vh - 88px - 44px)}
+  #ticker{display:flex;height:44px}
+  .panel{flex:none;width:100%;height:100%}
+  #panel-arr,#panel-dep{display:none}
+  #panel-arr.active,#panel-dep.active{display:flex}
+  .col-hdr,.row{grid-template-columns:4px 1fr 1.2fr auto}
+  .col-hdr .ch-berth,.row .cell-berth,
+  .col-hdr .ch-pax,.row .cell-pax{display:none}
+  .cell-time{min-width:80px;padding-right:10px}
+  .ch.time-hdr{min-width:80px;padding-right:10px}
+  .tsep:last-of-type,.titem:last-of-type{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="anchor">⚓</span>
+  <h1>Meriaikataulu</h1>
+  <span class="sub">Arvioidut saapumis- ja lähtöajat linjaliikenne</span>
+  <div class="right">
+    <span id="timestamp">Ladataan…</span>
+    <button id="refresh-btn" onclick="fetchData()">Päivitä</button>
+  </div>
+</div>
+
+<div id="tabs">
+  <div class="tab active-arr" id="tab-arr" onclick="showTab('arr')">▼ Saapuvat</div>
+  <div class="tab" id="tab-dep" onclick="showTab('dep')">▶ Lähtevät</div>
+</div>
+
+<div id="main">
+  <div class="panel active" id="panel-arr">
+    <div class="panel-title arr"><span>▼ &nbsp;Saapuvat</span></div>
+    <div class="col-hdr">
+      <div></div>
+      <div class="ch">Alus</div>
+      <div class="ch">Reitti</div>
+      <div class="ch ch-berth">Laituri</div>
+      <div class="ch ch-pax pax-hdr">Matkustajia</div>
+      <div class="ch time-hdr">ETA</div>
+    </div>
+    <div class="rows" id="rows-arr"></div>
+  </div>
+
+  <div class="panel" id="panel-dep">
+    <div class="panel-title dep"><span>▶ &nbsp;Lähtevät</span></div>
+    <div class="col-hdr">
+      <div></div>
+      <div class="ch">Alus</div>
+      <div class="ch">Reitti</div>
+      <div class="ch ch-berth">Laituri</div>
+      <div class="ch ch-pax pax-hdr">Matkustajia</div>
+      <div class="ch time-hdr">ETD</div>
+    </div>
+    <div class="rows" id="rows-dep"></div>
+  </div>
+</div>
+
+<div id="ticker">
+  <span id="ticker-clock">00:00:00</span>
+  <div class="tsep"></div>
+  <div class="titem">
+    <span class="tlbl">Seuraava saapuva</span>
+    <span class="tname" id="ticker-arr-name">—</span>
+    <span class="tcd" id="ticker-arr-cd"></span>
+  </div>
+  <div class="tsep"></div>
+  <div class="titem">
+    <span class="tlbl">Seuraava lähtevä</span>
+    <span class="tname" id="ticker-dep-name">—</span>
+    <span class="tcd" id="ticker-dep-cd"></span>
+  </div>
+  <span id="disclaimer">Ajat ovat arvioita. Tarkista viimeisimmät tiedot varustamolta.</span>
+</div>
+
+<script>
+// ── Kapasiteettilista täyttöasteprosenttia varten ─────────────────────────────
+// Näytetään automaattisesti kaikki Suomeen tulevat matkustaja-alukset (FI-satamat).
+// Kapasiteetti tarvitaan vain täyttöasteen värikoodia varten.
+const CAPACITY={
+  "MYSTAR":2800,"MEGASTAR":2800,"FINLANDIA":2080,"VIKING GLORY":2800,
+  "VIKING XPRS":2500,"VIKING GRACE":2800,"SILJA SYMPHONY":2852,
+  "SILJA SERENADE":2852,"VIKING CINDERELLA":2560,"BALTIC PRINCESS":2800,
+  "GABRIELLA":2420,"BALTIC QUEEN":2800,"ECKERÖ":1500,"VICTORIA I":2500,
+  "BIRKA GOTLAND":1800,"FINNCANOPUS":1100,"FINNSIRIUS":1100,
+  "AURORA BOTNIA":935,"FINNMAID":554,"FINNSTAR":554,"FINNLADY":554,
+  "SUPERFAST IX":550,"FINBO CARGO":366,"SAMPO":104,"ARKTIS":106,
+};
+
+const WINDOW_H=12, REFRESH_MS=600_000;
+let refreshTimer=null, _nextArr=null, _nextDep=null;
+
+// Tallennetaan viimeisin renderöity data — käytetään välilehtivaihdossa
+let _lastArrRows=null, _lastDepRows=null, _lastArrNext=0, _lastDepNext=0;
+
+// ── Välilehtivaihto ───────────────────────────────────────────────────────────
+// Ongelma: paneeli oli display:none joten clientHeight=0 kun fetchData ajettiin.
+// Ratkaisu: tallennetaan data ja piirretään uudelleen requestAnimationFrame:lla
+// kun paneeli on jo näkyvissä ja sen mitat ovat oikein.
+function showTab(which){
+  document.getElementById('panel-arr').classList.toggle('active', which==='arr');
+  document.getElementById('panel-dep').classList.toggle('active', which==='dep');
+  document.getElementById('tab-arr').className='tab'+(which==='arr'?' active-arr':'');
+  document.getElementById('tab-dep').className='tab'+(which==='dep'?' active-dep':'');
+  requestAnimationFrame(()=>{
+    if(which==='arr' && _lastArrRows) renderRows('rows-arr',_lastArrRows,_lastArrNext);
+    if(which==='dep' && _lastDepRows) renderRows('rows-dep',_lastDepRows,_lastDepNext);
+  });
+}
+
+function fmtDt(d){
+  return`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
+
+function occ(pax,name){
+  const c=CAPACITY[name.toUpperCase()];
+  if(!c||!pax||pax<=0)return null;
+  const p=Math.min(pax/c,1);
+  if(p>=.75)return{color:'#e05555',bg:'#2a1010',p};
+  if(p>=.35)return{color:'#e0c040',bg:'#2a2010',p};
+  return{color:'#4dd88a',bg:'#0f2a18',p}}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function routeCell(from,to,isNext){
+  const fc=isNext?'#1a3a5c':'var(--light)';
+  const ac=isNext?'#2a5a8c':'var(--muted)';
+  const tc=isNext?'#0a5aaa':'var(--blue)';
+  return`<div class="cell cell-route"><span class="from" style="color:${fc}">${esc(from)}</span><span class="arrow" style="color:${ac}">→</span><span class="to" style="color:${tc}">${esc(to)}</span></div>`}
+
+function renderRows(id,rows,nextIdx){
+  const el=document.getElementById(id);
+  const rowH=window.innerWidth<600?44:42;
+  const vis=Math.max(1,Math.floor(el.clientHeight/rowH));
+  const n=rows.length;
+
+  // Jos dataa on vähemmän kuin näytettäviä rivejä, ei kierrätystä —
+  // näytetään data järjestyksessä ja loput tyhjinä riveinä
+  const useScroll = n > 0 && !rows[0].empty && n >= vis;
+  const offset = useScroll ? ((nextIdx-Math.floor(vis/2))%n+n)%n : 0;
+
+  const emptyRow=`<div class="row empty-row" style="height:${rowH}px"><div class="row-bar"></div><div class="cell empty">—</div><div class="cell empty">—</div><div class="cell ch-berth cell-berth empty">—</div><div class="cell ch-pax cell-pax empty">—</div><div class="cell cell-time empty">—</div></div>`;
+
+  let html='';
+  for(let i=0;i<vis;i++){
+    // Jos ei kierrätetä ja indeksi ylittää datan, näytetään tyhjä rivi
+    if(!useScroll && i>=n){ html+=emptyRow; continue; }
+    const di=useScroll?(offset+i)%n:i;
+    const r=rows[di],isN=di===nextIdx,empty=r.empty;
+    let cls='row';
+    if(empty)cls+=' empty-row';
+    else if(isN)cls+=' next';
+    else if(i%2)cls+=' alt';
+    if(empty){
+      html+=emptyRow;
+    }else{
+      const o=occ(r.rawPax||0,r.name);
+      const ps=o?`style="color:${o.color};background:${o.bg};padding:2px 6px 2px 5px;border-radius:4px;"`:'';
+      const pl=o?`${r.pax} <span style="font-size:.8em;opacity:.8">(${Math.round(o.p*100)}%)</span>`:esc(r.pax);
+      html+=`<div class="${cls}" style="height:${rowH}px"><div class="row-bar"></div><div class="cell cell-name">${esc(r.name)}</div>${routeCell(r.from,r.to,isN)}<div class="cell ch-berth cell-berth">${esc(r.berth)}</div><div class="cell ch-pax cell-pax" ${ps}>${pl}</div><div class="cell cell-time">${esc(r.time)}</div></div>`;
+    }
+  }
+  el.innerHTML=html}
+
+function showError(msg){
+  ['rows-arr','rows-dep'].forEach(id=>{
+    document.getElementById(id).innerHTML=`<div class="row" style="height:48px"><div class="row-bar"></div><div class="error-msg">${esc(msg)}</div></div>`});
+  document.getElementById('timestamp').textContent=`Päivitys epäonnistui: ${fmtDt(new Date())}`}
+
+async function fetchData(){
+  if(refreshTimer)clearTimeout(refreshTimer);
+  const now=new Date();
+  let data;
+  try{
+    const r=await fetch('https://meri.digitraffic.fi/api/port-call/v1/port-calls',
+      {headers:{'Digitraffic-User':'Meriaikataulu/1.0'}});
+    if(!r.ok){showError(`Palvelin palautti virheen (HTTP ${r.status}) — yritetään uudelleen 10 min kuluttua`);
+      refreshTimer=setTimeout(fetchData,REFRESH_MS);return}
+    data=await r.json();
+  }catch(e){
+    showError(navigator.onLine?'Tiedonhaku epäonnistui — yritetään uudelleen 10 min kuluttua':'Ei verkkoyhteyttä — tarkista internetyhteys');
+    refreshTimer=setTimeout(fetchData,REFRESH_MS);return}
+
+  const arr=[],dep=[];
+  for(const pc of(data.portCalls||[])){
+    try{
+      const d=(pc.portAreaDetails||[{}])[0];
+      const areaCode=d.portAreaCode||'';
+      if(!areaCode.startsWith('FI')&&!(pc.portToVisit||'').startsWith('FI'))continue;
+      const vtype=pc.vesselTypeCode;
+      const vname=(pc.vesselName||'').toUpperCase();
+      if(vtype!==10&&vtype!==20&&!CAPACITY[vname])continue;
+      const prev=pc.prevPort||'—',ptv=pc.portToVisit||'—',next=pc.nextPort||'—';
+      const berth=d.berthName||d.berthCode||'—';
+      const imo=pc.imoInformation||[];
+      const ia=imo.find(i=>i.imoGeneralDeclaration==='Arrival');
+      const id2=imo.find(i=>i.imoGeneralDeclaration==='Departure');
+      const rpa=(ia&&ia.numberOfPassangers>0)?ia.numberOfPassangers:0;
+      const rpd=(id2&&id2.numberOfPassangers>0)?id2.numberOfPassangers:0;
+      if(d.eta){const dt=new Date(d.eta);const dh=(dt-now)/3600000;
+        if(dh>=-WINDOW_H&&dh<=WINDOW_H)
+          arr.push({dt,name:pc.vesselName,from:prev,to:ptv,berth,
+            pax:rpa>0?rpa.toLocaleString('fi-FI'):'—',rawPax:rpa,time:fmtDt(dt)})}
+      if(d.etd){const dt=new Date(d.etd);const dh=(dt-now)/3600000;
+        if(dh>=-WINDOW_H&&dh<=WINDOW_H)
+          dep.push({dt,name:pc.vesselName,from:ptv,to:next,berth,
+            pax:rpd>0?rpd.toLocaleString('fi-FI'):'—',rawPax:rpd,time:fmtDt(dt)})}
+    }catch(_){continue}}
+
+  arr.sort((a,b)=>a.dt-b.dt);dep.sort((a,b)=>a.dt-b.dt);
+  const ni=r=>r.findIndex(x=>x.dt>now);
+  const pad=r=>r.length>0?r:Array(8).fill({name:'—',from:'—',to:'—',berth:'—',pax:'—',rawPax:0,time:'—',empty:true});
+  const ar=pad(arr),dr=pad(dep);
+  const an=arr.length?Math.max(0,ni(arr)):0, dn=dep.length?Math.max(0,ni(dep)):0;
+  const anF=an<0?ar.length-1:an, dnF=dn<0?dr.length-1:dn;
+
+  // Tallennetaan viimeisin data välilehtivaihtoa varten
+  _lastArrRows=ar; _lastDepRows=dr; _lastArrNext=anF; _lastDepNext=dnF;
+
+  renderRows('rows-arr',ar,anF);
+  renderRows('rows-dep',dr,dnF);
+
+  const ai=arr.findIndex(x=>x.dt>now),di=dep.findIndex(x=>x.dt>now);
+  _nextArr=ai>=0?arr[ai]:arr.length?arr[arr.length-1]:null;
+  _nextDep=di>=0?dep[di]:dep.length?dep[dep.length-1]:null;
+  document.getElementById('timestamp').textContent=`Päivitetty portnetistä: ${fmtDt(now)}`;
+  refreshTimer=setTimeout(fetchData,REFRESH_MS)}
+
+function fmtCd(dt){
+  const ms=dt-new Date(),m=Math.round(ms/60000),h=ms/3600000;
+  if(ms<0){const a=Math.round(-ms/60000);return{t:a<60?`${a} min sitten`:`${Math.round(-h)} h sitten`,c:'past'}}
+  if(m<60)return{t:`${m} min`,c:m<=15?'soon':'later'};
+  const hh=Math.floor(h),mm=Math.round((h-hh)*60);
+  return{t:mm>0?`${hh} h ${mm} min`:`${hh} h`,c:'later'}}
+
+function updateTicker(){
+  const n=new Date();
+  document.getElementById('ticker-clock').textContent=
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  for(const[r,ni,ci]of[[_nextArr,'ticker-arr-name','ticker-arr-cd'],[_nextDep,'ticker-dep-name','ticker-dep-cd']]){
+    if(r){const cd=fmtCd(r.dt);document.getElementById(ni).textContent=r.name;
+      const el=document.getElementById(ci);el.textContent=cd.t;el.className=`tcd ${cd.c}`}
+    else{document.getElementById(ni).textContent='Ei tietoa';document.getElementById(ci).textContent=''}}}
+
+fetchData();
+setInterval(updateTicker,1000);
+updateTicker();
+window.addEventListener('resize',()=>{
+  clearTimeout(window._rt);
+  window._rt=setTimeout(()=>{
+    if(_lastArrRows)renderRows('rows-arr',_lastArrRows,_lastArrNext);
+    if(_lastDepRows)renderRows('rows-dep',_lastDepRows,_lastDepNext);
+  },200)});
+</script>
+</body>
+</html>
