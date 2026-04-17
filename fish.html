@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FishCast v1.5 — Kalastusennuste Suomeen</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+:root {
+  --bg-deep:#0b1a18;--bg-card:#0f2320;--bg-inner:#091a18;--bg-hover:#132b28;
+  --border:#1c3835;--border-hi:#2a5550;
+  --teal:#3eb8a8;--teal-dim:#1d7068;--teal-bg:#0d2e2b;
+  --amber:#c8781a;--amber-dim:#7a4810;--amber-bg:#261508;
+  --green:#5dab50;--green-bg:#132012;
+  --text-hi:#c8dedd;--text-mid:#7aaca8;--text-lo:#3d6e6a;
+  --font-main:'IBM Plex Sans',sans-serif;--font-mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font-main);background:var(--bg-deep);color:var(--text-hi)}
+
+/* TOPBAR */
+#topbar{
+  background:var(--bg-card);border-bottom:1px solid var(--border);
+  padding:0 16px;display:flex;align-items:stretch;justify-content:space-between;
+  height:46px;position:relative;z-index:1000;flex-shrink:0;
+}
+.logo{font-family:var(--font-mono);font-size:14px;font-weight:500;color:var(--teal);display:flex;align-items:center;gap:8px}
+.logo-sub{font-size:11px;color:var(--text-lo)}
+.day-tabs{display:flex;align-items:stretch}
+.dtab{
+  padding:0 20px;font-size:12px;font-weight:500;font-family:var(--font-mono);
+  cursor:pointer;border:none;background:transparent;color:var(--text-lo);
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .2s,border-color .2s;
+}
+.dtab:hover{color:var(--text-mid)}
+.dtab.active-today{color:var(--teal);border-bottom-color:var(--teal)}
+.dtab.active-tmrw{color:var(--amber);border-bottom-color:var(--amber)}
+.topbtns{display:flex;align-items:center;gap:6px}
+.tbtn{
+  background:var(--bg-inner);border:1px solid var(--border);border-radius:5px;
+  color:var(--text-mid);font-size:11px;font-family:var(--font-mono);padding:5px 12px;
+  cursor:pointer;transition:background .15s,color .15s;
+}
+.tbtn:hover{background:var(--bg-hover);color:var(--text-hi)}
+
+/* LAYOUT */
+#layout{display:grid;grid-template-columns:1fr 390px;height:calc(100vh - 46px)}
+
+/* MAP */
+#map-col{position:relative;background:var(--bg-inner);overflow:hidden}
+#map{width:100%;height:100%}
+.leaflet-container{background:#091612!important}
+#map-badge{
+  position:absolute;top:10px;left:10px;z-index:500;
+  background:rgba(11,26,24,.88);border:1px solid var(--border);border-radius:5px;
+  padding:5px 10px;font-size:11px;color:var(--text-lo);font-family:var(--font-mono);pointer-events:none;
+}
+#coord-badge{
+  position:absolute;bottom:52px;left:10px;z-index:500;
+  background:rgba(11,26,24,.92);border:1px solid var(--border);border-radius:5px;
+  padding:5px 10px;font-size:11px;color:var(--teal);font-family:var(--font-mono);pointer-events:none;
+  display:none;
+}
+#analyse-btn{
+  position:absolute;bottom:10px;right:10px;z-index:500;
+  background:var(--teal);border:none;border-radius:6px;
+  color:var(--bg-deep);font-size:12px;font-weight:500;font-family:var(--font-mono);
+  padding:9px 18px;cursor:pointer;transition:background .15s,transform .1s;
+  letter-spacing:.3px;
+}
+#analyse-btn:hover{background:#4dd0bf}
+#analyse-btn:active{transform:scale(.97)}
+#analyse-btn:disabled{background:var(--teal-dim);color:var(--bg-deep);cursor:not-allowed;opacity:.7}
+
+/* LOADING */
+#loading-overlay{
+  display:none;position:absolute;inset:0;z-index:900;
+  background:rgba(11,26,24,.85);align-items:center;justify-content:center;
+  flex-direction:column;gap:14px;
+}
+#loading-overlay.show{display:flex}
+.spin{width:34px;height:34px;border:2px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-text{font-family:var(--font-mono);font-size:12px;color:var(--text-mid)}
+
+/* SIDEBAR */
+#sidebar{
+  background:var(--bg-deep);border-left:1px solid var(--border);
+  overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;
+}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-track{background:var(--bg-deep)}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* CARDS */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.card.tmrw-card{border-color:var(--amber-dim)}
+.ctitle{font-size:9px;color:var(--text-lo);text-transform:uppercase;letter-spacing:1px;font-family:var(--font-mono);margin-bottom:8px}
+
+/* WELCOME */
+#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;gap:10px;padding:20px;color:var(--text-lo)}
+.wicon{font-size:36px;opacity:.35}
+.wtitle{font-size:14px;color:var(--text-mid);font-family:var(--font-mono)}
+.wsub{font-size:11px;line-height:1.65;max-width:200px}
+
+/* PLACE CARD */
+.place-row{display:flex;align-items:flex-start;gap:9px}
+.pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.pname{font-size:13px;font-weight:500;color:var(--text-hi);line-height:1.3}
+.pcoord{font-size:10px;color:var(--text-lo);font-family:var(--font-mono);margin-top:2px}
+
+/* SCORE */
+.score-wrap{text-align:center;padding:4px 0 8px}
+.score-num{font-size:50px;font-weight:300;font-family:var(--font-mono);line-height:1}
+.score-pill{display:inline-block;font-size:10px;font-family:var(--font-mono);padding:3px 14px;border-radius:20px;margin-top:6px;letter-spacing:.5px}
+.score-segs{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:10px}
+.sseg{height:3px;border-radius:2px;background:var(--border)}
+
+/* WEATHER GRID */
+.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.witem{background:var(--bg-inner);border-radius:5px;padding:7px 9px}
+.wlabel{font-size:9px;color:var(--text-lo);font-family:var(--font-mono);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.wval{font-size:13px;font-weight:500;color:var(--text-hi)}
+.wunit{font-size:10px;color:var(--text-mid);margin-left:2px}
+
+/* HOURLY CHART */
+.hchart-bars{display:flex;gap:4px;align-items:flex-end;height:56px;margin-bottom:4px}
+.hbar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.hbar{width:100%;border-radius:3px 3px 0 0;min-height:4px;transition:height .4s ease}
+.hbar-today{background:var(--teal)}
+.hbar-tmrw{background:var(--amber)}
+.hbar-score{font-size:9px;color:var(--text-lo);font-family:var(--font-mono)}
+.hbar-hr{font-size:9px;color:var(--text-lo);font-family:var(--font-mono)}
+.hchart-meta{display:flex;gap:4px}
+.hm-item{flex:1;background:var(--bg-inner);border-radius:5px;padding:5px 3px;text-align:center}
+.hm-time{font-size:9px;color:var(--text-lo);font-family:var(--font-mono);margin-bottom:2px}
+.hm-icon{font-size:12px}
+.hm-temp{font-size:10px;font-weight:500;color:var(--text-mid);margin-top:1px;font-family:var(--font-mono)}
+
+/* SUN/MOON */
+.sun-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sitem{text-align:center;flex:1}
+.sval{font-size:13px;font-weight:500;color:#c8a030;font-family:var(--font-mono)}
+.skey{font-size:9px;color:var(--text-lo);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.sdiv{width:1px;height:26px;background:var(--border)}
+.moon-pill{display:inline-block;background:var(--bg-inner);border:1px solid var(--border);border-radius:20px;font-size:10px;font-family:var(--font-mono);color:var(--text-mid);padding:3px 12px}
+
+/* SPECIES */
+.sprow{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.sprow:last-child{margin-bottom:0}
+.spname{font-size:12px;color:var(--text-mid);width:44px;flex-shrink:0;font-family:var(--font-mono)}
+.spbg{flex:1;background:var(--bg-inner);border-radius:3px;height:5px;overflow:hidden}
+.spfill{height:100%;border-radius:3px;transition:width .6s ease}
+.spscore{font-size:12px;font-weight:500;width:24px;text-align:right;font-family:var(--font-mono)}
+
+/* BEST TIME */
+.btwrap{background:var(--bg-inner);border-radius:5px;padding:8px 10px}
+.btrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.btrow:last-child{margin-bottom:0}
+.btlabel{font-size:11px;color:var(--text-lo)}
+.btval{font-size:11px;font-weight:500;font-family:var(--font-mono)}
+
+/* LURES */
+.lure-section{margin-bottom:7px}
+.lure-section:last-child{margin-bottom:0}
+.lure-sp{font-size:9px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.7px;font-family:var(--font-mono);margin-bottom:4px}
+.tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:20px;margin:2px;font-family:var(--font-mono)}
+.tag-a{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-dim)}
+.tag-h{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-dim)}
+.tag-k{background:var(--green-bg);color:var(--green);border:1px solid #2a5020}
+
+/* SUMMARY */
+.sumbox{background:var(--bg-inner);border-radius:5px;padding:8px 10px;font-size:11px;color:var(--text-mid);line-height:1.7}
+.sumbox strong{color:var(--text-hi);font-weight:500}
+
+/* VARS GRID */
+.vgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.vitem{background:var(--bg-inner);border-radius:5px;padding:5px 6px;text-align:center}
+.vkey{font-size:9px;color:var(--text-lo);font-family:var(--font-mono)}
+.vval{font-size:10px;color:var(--text-hi);font-weight:500;font-family:var(--font-mono);margin-top:1px}
+
+/* NOTICE */
+.api-notice{background:#1a1010;border:1px solid #4a2020;border-radius:5px;padding:6px 10px;font-size:10px;font-family:var(--font-mono);color:#a05050;display:none}
+
+/* TMRW BANNER */
+.tmrw-banner{background:var(--amber-bg);border:1px solid var(--amber-dim);border-radius:6px;padding:7px 10px;font-size:10px;font-family:var(--font-mono);color:var(--amber);text-align:center;letter-spacing:.4px}
+
+@media(max-width:768px){
+  html,body{overflow:auto}
+  #layout{grid-template-columns:1fr;grid-template-rows:50vh auto;height:auto}
+  #map-col{height:50vh}
+  #sidebar{overflow-y:visible}
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">FishCast <span class="logo-sub">v1.5 · Suomi</span></div>
+  <div class="day-tabs">
+    <button class="dtab active-today" id="tab-today" onclick="switchDay('today')">Tänään</button>
+    <button class="dtab" id="tab-tmrw" onclick="switchDay('tomorrow')">Huomenna</button>
+  </div>
+  <div class="topbtns">
+    <button class="tbtn" onclick="refreshData()">Päivitä</button>
+    <button class="tbtn" onclick="downloadPDF()">PDF</button>
+    <button class="tbtn" onclick="clearSelection()">Tyhjennä</button>
+  </div>
+</div>
+
+<div id="layout">
+  <div id="map-col">
+    <div id="map"></div>
+    <div id="map-badge">Leaflet.js · OpenStreetMap</div>
+    <div id="coord-badge">—</div>
+    <button id="analyse-btn" disabled onclick="runAnalysis()">Analysoi kalastuspaikka</button>
+    <div id="loading-overlay">
+      <div class="spin"></div>
+      <div class="load-text" id="load-text">Haetaan dataa...</div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div id="welcome">
+      <div class="wicon">🎣</div>
+      <div class="wtitle">Valitse kalastuspaikka</div>
+      <div class="wsub">Klikkaa karttaa valitaksesi sijainnin ja paina "Analysoi kalastuspaikka".</div>
+    </div>
+    <div id="results" style="display:none;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let selectedLat = null, selectedLng = null;
+let marker = null;
+let currentDay = 'today'; // 'today' | 'tomorrow'
+let analysisData = null;
+
+// ─────────────────────────────────────────────
+// MAP INIT
+// ─────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([64.5, 26.0], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap',
+  maxZoom: 18
+}).addTo(map);
+
+// Custom dark tile filter
+const style = document.createElement('style');
+style.textContent = '.leaflet-tile{filter:brightness(.55) saturate(.6) hue-rotate(160deg)}';
+document.head.appendChild(style);
+
+map.on('click', function(e) {
+  selectedLat = parseFloat(e.latlng.lat.toFixed(5));
+  selectedLng = parseFloat(e.latlng.lng.toFixed(5));
+  if (marker) map.removeLayer(marker);
+  const icon = L.divIcon({
+    html: `<div style="width:12px;height:12px;background:#3eb8a8;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(62,184,168,.2)"></div>`,
+    iconSize:[12,12], iconAnchor:[6,6], className:''
+  });
+  marker = L.marker([selectedLat, selectedLng], {icon}).addTo(map);
+  document.getElementById('coord-badge').style.display = 'block';
+  document.getElementById('coord-badge').textContent = `${selectedLat}° N · ${selectedLng}° E`;
+  document.getElementById('analyse-btn').disabled = false;
+});
+
+// ─────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function scoreColor(s) {
+  if (s >= 75) return '#3eb8a8';
+  if (s >= 60) return '#c8b030';
+  if (s >= 40) return '#c8781a';
+  return '#a03535';
+}
+function scoreLabel(s) {
+  if (s >= 90) return 'Erinomainen';
+  if (s >= 75) return 'Hyvä';
+  if (s >= 60) return 'Kohtalainen';
+  if (s >= 40) return 'Heikko';
+  return 'Vaikea';
+}
+function scorePillBg(s) {
+  if (s >= 75) return 'background:#0d2e2b;color:#3eb8a8;border:1px solid #1d7068';
+  if (s >= 60) return 'background:#2a2508;color:#c8b030;border:1px solid #6a5010';
+  if (s >= 40) return 'background:#261508;color:#c8781a;border:1px solid #7a4810';
+  return 'background:#1a0808;color:#a03535;border:1px solid #6a1818';
+}
+
+// Moon phase calculation (astronomical formula)
+function getMoonPhase(date) {
+  const d = new Date(date);
+  const year = d.getFullYear(), month = d.getMonth() + 1, day = d.getDate();
+  let c = 0, e = 0, jd = 0;
+  if (month < 3) { c = year - 1; e = month + 12; }
+  else { c = year; e = month; }
+  jd = Math.floor(365.25 * (c + 4716)) + Math.floor(30.6001 * (e + 1)) + day - 1524.5;
+  const synmonth = 29.53058867;
+  const age = (jd - 2451550.1) % synmonth;
+  const phase = ((age < 0 ? age + synmonth : age) / synmonth) * 100;
+  let name = '';
+  if (phase < 3 || phase > 97) name = 'Uusikuu';
+  else if (phase < 25) name = 'Kasvava sirppi';
+  else if (phase < 30) name = 'Ensimmäinen neljännes';
+  else if (phase < 48) name = 'Kasvava kupera';
+  else if (phase < 52) name = 'Täysikuu';
+  else if (phase < 72) name = 'Vähenevä kupera';
+  else if (phase < 78) name = 'Viimeinen neljännes';
+  else name = 'Vähenevä sirppi';
+  return { phase: Math.round(phase), name };
+}
+
+// Sunrise/sunset (simplified, accurate enough for Finland)
+function getSunTimes(lat, lng, date) {
+  const d = new Date(date);
+  const J2000 = 2451545.0;
+  const toDeg = 180 / Math.PI, toRad = Math.PI / 180;
+  const JD = (d.getTime() / 86400000) + 2440587.5;
+  const n = Math.ceil(JD - J2000 - 0.0009 - lng / 360);
+  const Jstar = J2000 + 0.0009 + lng / 360 + n;
+  const M = (357.5291 + 0.98560028 * (Jstar - J2000)) % 360;
+  const Mrad = M * toRad;
+  const C = 1.9148 * Math.sin(Mrad) + 0.0200 * Math.sin(2 * Mrad) + 0.0003 * Math.sin(3 * Mrad);
+  const lam = (M + C + 180 + 102.9372) % 360;
+  const lamRad = lam * toRad;
+  const Jtransit = Jstar + 0.0053 * Math.sin(Mrad) - 0.0069 * Math.sin(2 * lamRad);
+  const sindec = Math.sin(lamRad) * Math.sin(23.4397 * toRad);
+  const cosHA = (Math.sin(-0.8333 * toRad) - Math.sin(lat * toRad) * sindec) / (Math.cos(lat * toRad) * Math.cos(Math.asin(sindec)));
+  if (Math.abs(cosHA) > 1) { return { sunrise: '00:00', sunset: '23:59', duration: 24 * 60, dusk: '23:59', dawn: '00:00' }; }
+  const HA = Math.acos(cosHA) * toDeg;
+  const Jset = Jtransit + HA / 360;
+  const Jrise = Jtransit - HA / 360;
+  const toTime = jd => {
+    const frac = ((jd - Math.floor(jd)) + 0.5) % 1;
+    const totalMin = Math.round(frac * 1440);
+    return `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+  };
+  const addMin = (t, m) => {
+    const [h, mn] = t.split(':').map(Number);
+    const tot = h * 60 + mn + m;
+    return `${String(Math.floor((tot % 1440) / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
+  };
+  const sunrise = toTime(Jrise), sunset = toTime(Jset);
+  const rMin = parseInt(sunrise.split(':')[0]) * 60 + parseInt(sunrise.split(':')[1]);
+  const sMin = parseInt(sunset.split(':')[0]) * 60 + parseInt(sunset.split(':')[1]);
+  return { sunrise, sunset, duration: sMin - rMin, dusk: addMin(sunset, 34), dawn: addMin(sunrise, -34) };
+}
+
+// Estimated water temperature
+function estimateWaterTemp(airTemp, month, isCoastal) {
+  const base = [-1, -1, 1, 5, 12, 17, 20, 19, 15, 9, 4, 0];
+  const wt = base[month - 1] + (airTemp - base[month - 1]) * 0.25;
+  return parseFloat((isCoastal ? wt * 0.92 : wt).toFixed(1));
+}
+
+// Detect location type from name
+function detectLocationType(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('järvi') || n.includes('lake') || n.includes('selkä') || n.includes('vesi') || n.includes('lampi')) return 'järvi';
+  if (n.includes('meri') || n.includes('lahti') || n.includes('saaristo') || n.includes('sea') || n.includes('gulf')) return 'rannikko';
+  return 'sisämaa';
+}
+
+// ─────────────────────────────────────────────
+// SCORING ENGINE — 18 VARIABLES
+// ─────────────────────────────────────────────
+function computeScore(params) {
+  const {
+    temp, pressure, pressureTrend, windSpeed, windDir,
+    cloudiness, rain, hour, sunrise, sunset, dusk, moonPhase,
+    month, waterTemp, locationType, isOffsetDay
+  } = params;
+
+  // 1. WEATHER (35%)
+  let weatherScore = 0;
+  // Pilvisyys: 30-70% on ihanteellinen
+  const cloudS = cloudiness < 10 ? 40 : cloudiness < 30 ? 65 : cloudiness < 60 ? 100 : cloudiness < 80 ? 75 : 45;
+  // Tuuli: alle 5 m/s ihanteellinen
+  const windS = windSpeed < 1 ? 60 : windSpeed < 3 ? 95 : windSpeed < 5 ? 85 : windSpeed < 8 ? 55 : windSpeed < 12 ? 30 : 10;
+  // Paine: stabiili tai nouseva parempi
+  const pressureS = pressureTrend > 1 ? 90 : pressureTrend > -1 ? 75 : pressureTrend > -3 ? 50 : 30;
+  // Sade: ei sadetta hyvä
+  const rainS = rain < 0.1 ? 100 : rain < 0.5 ? 70 : rain < 2 ? 40 : 15;
+  // Lämpötila: 10-20°C ihanteellinen
+  const tempS = temp < 0 ? 20 : temp < 5 ? 45 : temp < 10 ? 65 : temp < 20 ? 90 : temp < 25 ? 70 : 45;
+  weatherScore = (cloudS * 0.25 + windS * 0.30 + pressureS * 0.25 + rainS * 0.10 + tempS * 0.10);
+
+  // 2. AIKA (20%)
+  let timeScore = 0;
+  const sunriseMin = parseInt(sunrise.split(':')[0]) * 60 + parseInt(sunrise.split(':')[1]);
+  const sunsetMin = parseInt(sunset.split(':')[0]) * 60 + parseInt(sunset.split(':')[1]);
+  const duskMin = parseInt(dusk.split(':')[0]) * 60 + parseInt(dusk.split(':')[1]);
+  const currentMin = hour * 60;
+  const dawnWindow = Math.abs(currentMin - sunriseMin) < 90;
+  const duskWindow = currentMin >= (sunsetMin - 60) && currentMin <= (duskMin + 30);
+  const midday = currentMin >= 660 && currentMin <= 840;
+  const nightDeep = currentMin < 180 || currentMin > 1320;
+  if (dawnWindow) timeScore = 90;
+  else if (duskWindow) timeScore = 95;
+  else if (midday && cloudiness > 40) timeScore = 65;
+  else if (nightDeep) timeScore = 25;
+  else timeScore = 50;
+
+  // 3. VUODENAIKA (15%)
+  let seasonScore = 0;
+  const monthScores = [25, 30, 55, 75, 85, 90, 80, 75, 85, 70, 50, 30];
+  seasonScore = monthScores[month - 1];
+
+  // 4. VESI (15%)
+  let waterScore = 0;
+  waterScore = waterTemp < 2 ? 20 : waterTemp < 6 ? 45 : waterTemp < 10 ? 70 : waterTemp < 18 ? 90 : waterTemp < 22 ? 70 : 45;
+
+  // 5. SIJAINTI (5%)
+  let locationScore = locationType === 'järvi' ? 80 : locationType === 'rannikko' ? 75 : 55;
+
+  // 6. KALALOGIIKKA (10%)
+  let fishLogicScore = 0;
+  // Kutukausi: ahven/hauki kutu huhti-touko, kuha kesä
+  const spawning = (month === 4 || month === 5) ? 1.15 : (month === 6 && waterTemp > 15) ? 1.10 : 1.0;
+  // Syönti-ikkuna: dusk/dawn bonus
+  const feedingWindow = (dawnWindow || duskWindow) ? 1.2 : 1.0;
+  // Kuun vaikutus: täysikuu ja uusikuu parempi
+  const moonEffect = (moonPhase > 45 && moonPhase < 55) || moonPhase < 10 || moonPhase > 90 ? 1.1 : 1.0;
+  fishLogicScore = clamp(60 * spawning * feedingWindow * moonEffect, 0, 100);
+
+  const total = Math.round(
+    weatherScore * 0.35 +
+    timeScore * 0.20 +
+    seasonScore * 0.15 +
+    waterScore * 0.15 +
+    locationScore * 0.05 +
+    fishLogicScore * 0.10
+  );
+
+  return { total: clamp(total, 0, 100), weatherScore, timeScore, seasonScore, waterScore, locationScore, fishLogicScore };
+}
+
+// Species scores
+function computeSpecies(params, base) {
+  const { cloudiness, windSpeed, pressureTrend, waterTemp, month, hour, sunset } = params;
+  const sunsetMin = parseInt(sunset.split(':')[0]) * 60 + parseInt(sunset.split(':')[1]);
+  const isEvening = hour * 60 >= sunsetMin - 120;
+  const isSpring = month >= 3 && month <= 5;
+  const isAutumn = month >= 8 && month <= 10;
+
+  let ahven = base + (cloudiness > 30 ? 5 : -5) + (windSpeed < 4 ? 4 : -3) + (isEvening ? 7 : 0) + (waterTemp > 8 ? 5 : -5);
+  let hauki = base + (pressureTrend < -1 ? 8 : 0) + (waterTemp < 14 ? 5 : -5) + ((isSpring || isAutumn) ? 8 : 0) + (windSpeed > 2 ? 3 : 0);
+  let kuha = base + (waterTemp > 12 ? 8 : -8) + (isEvening ? 10 : -5) + (windSpeed < 4 ? 5 : -3);
+
+  return {
+    ahven: clamp(Math.round(ahven), 0, 100),
+    hauki: clamp(Math.round(hauki), 0, 100),
+    kuha: clamp(Math.round(kuha), 0, 100)
+  };
+}
+
+// Best fishing times
+function getBestTimes(sunTimes, cloudiness) {
+  const { sunrise, sunset, dusk, dawn } = sunTimes;
+  const addMin = (t, m) => {
+    const [h, mn] = t.split(':').map(Number);
+    const tot = ((h * 60 + mn + m) + 1440) % 1440;
+    return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
+  };
+  const evening = addMin(sunset, -60);
+  const eveningEnd = addMin(dusk, 30);
+  const best = `${evening} – ${eveningEnd}`;
+  return [
+    { label: 'Aamuikkuna', val: `${addMin(sunrise, -30)} – ${addMin(sunrise, 90)}` },
+    { label: 'Iltaikkuna', val: `${evening} – ${addMin(sunset, 120)}` },
+    { label: 'Paras hetki', val: best, highlight: true }
+  ];
+}
+
+// Lure recommendations
+function getLures(species) {
+  const lures = { ahven: [], hauki: [], kuha: [] };
+  // Ahven
+  if (species.ahven >= 70) lures.ahven = ['Bladebait', 'Jigi 3–7g', 'Lippa'];
+  else if (species.ahven >= 50) lures.ahven = ['Jigi 3g', 'Pieni vaappu', 'Lusikka'];
+  else lures.ahven = ['Pieni jigi', 'Tasainen lippa'];
+  // Hauki
+  if (species.hauki >= 70) lures.hauki = ['Jerkki', 'Iso Shad', 'Spinnerbait'];
+  else if (species.hauki >= 50) lures.hauki = ['Lusikka', 'Vaappu', 'Softbait'];
+  else lures.hauki = ['Lusikka', 'Pieni vaappu'];
+  // Kuha
+  if (species.kuha >= 70) lures.kuha = ['Dropshot', 'Jigi 10–20g', 'Vaappu ilta'];
+  else if (species.kuha >= 50) lures.kuha = ['Jigi', 'Vertikaali', 'Vaappu'];
+  else lures.kuha = ['Syvä jigi', 'Vertikaali'];
+  return lures;
+}
+
+// Hourly scores for chart
+function buildHourlyScores(weatherData, baseParams, targetDay) {
+  const hours = targetDay === 'today' ? [15, 16, 17, 18, 19, 20] : [6, 9, 12, 15, 18, 20];
+  return hours.map(h => {
+    const p = { ...baseParams, hour: h };
+    const sc = computeScore(p);
+    return { hour: h, score: sc.total };
+  });
+}
+
+// Wind direction text
+function windDirText(deg) {
+  const dirs = ['P','KP','K','KI','E','EI','I','LI','L','LL','L','KL'];
+  return dirs[Math.round(deg / 30) % 12];
+}
+
+// ─────────────────────────────────────────────
+// API CALLS
+// ─────────────────────────────────────────────
+async function fetchWeather(lat, lng) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,cloud_cover&hourly=temperature_2m,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,cloud_cover&wind_speed_unit=ms&timezone=Europe/Helsinki&forecast_days=2`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Weather API failed');
+    return await r.json();
+  } catch (e) {
+    console.warn('Weather fallback', e);
+    return null;
+  }
+}
+
+async function fetchGeocode(lat, lng) {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fi`;
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'FishCast/1.5' } });
+    if (!r.ok) throw new Error('Geocode failed');
+    return await r.json();
+  } catch (e) {
+    console.warn('Geocode fallback', e);
+    return null;
+  }
+}
+
+// Weather icon from WMO code
+function weatherIcon(code) {
+  if (code === 0) return '☀️';
+  if (code <= 2) return '🌤️';
+  if (code <= 3) return '☁️';
+  if (code <= 48) return '🌫️';
+  if (code <= 57) return '🌦️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '❄️';
+  if (code <= 82) return '🌧️';
+  if (code <= 86) return '🌨️';
+  return '⛈️';
+}
+
+// ─────────────────────────────────────────────
+// ANALYSIS RUNNER
+// ─────────────────────────────────────────────
+async function runAnalysis() {
+  if (!selectedLat) return;
+  showLoading(true);
+  document.getElementById('analyse-btn').disabled = true;
+
+  try {
+    setLoadText('Haetaan säätietoja...');
+    const [weatherData, geoData] = await Promise.all([
+      fetchWeather(selectedLat, selectedLng),
+      fetchGeocode(selectedLat, selectedLng)
+    ]);
+
+    setLoadText('Lasketaan analyysiä...');
+    await new Promise(r => setTimeout(r, 300));
+
+    const now = new Date();
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+    const month = now.getMonth() + 1;
+    const hour = now.getHours();
+
+    // Parse place name
+    let placeName = 'Tuntematon paikka', placeType = 'sisämaa';
+    if (geoData) {
+      const a = geoData.address || {};
+      const parts = [a.lake || a.water || a.bay || a.body_of_water, a.village || a.town || a.city || a.municipality, a.county || a.state_district].filter(Boolean);
+      placeName = parts.slice(0, 2).join(' · ') || geoData.display_name?.split(',')[0] || 'Tuntematon';
+      placeType = detectLocationType((a.lake || a.water || a.body_of_water || geoData.display_name || '').toLowerCase());
+    }
+    const isCoastal = placeType === 'rannikko';
+
+    // Parse weather — today
+    let todayW = { temp: 12, pressure: 1013, pressureTrend: 0, windSpeed: 3, windDir: 225, cloudiness: 40, rain: 0 };
+    let tmrwW = { temp: 10, pressure: 1010, pressureTrend: -2, windSpeed: 5, windDir: 315, cloudiness: 70, rain: 1.2 };
+    let todayHourly = [], tmrwHourly = [];
+    let usedFallback = !weatherData || !geoData;
+
+    if (weatherData) {
+      const c = weatherData.current;
+      todayW = {
+        temp: parseFloat(c.temperature_2m.toFixed(1)),
+        pressure: Math.round(c.surface_pressure),
+        pressureTrend: 0, // computed below
+        windSpeed: parseFloat(c.wind_speed_10m.toFixed(1)),
+        windDir: c.wind_direction_10m,
+        cloudiness: c.cloud_cover,
+        rain: parseFloat(c.precipitation.toFixed(1))
+      };
+      // Pressure trend: compare current vs 6h ago from hourly
+      const hIdx = weatherData.hourly.time.findIndex(t => t === weatherData.current.time.slice(0,13)+':00');
+      if (hIdx > 6) {
+        todayW.pressureTrend = parseFloat((c.surface_pressure - weatherData.hourly.surface_pressure[hIdx - 6]).toFixed(1));
+      }
+      // Tomorrow average (from 6:00 to 20:00 tomorrow)
+      const tmrwDate = tomorrow.toISOString().slice(0, 10);
+      const tmrwSlots = weatherData.hourly.time.filter(t => t.startsWith(tmrwDate));
+      if (tmrwSlots.length > 0) {
+        const ti = tmrwSlots.map(t => weatherData.hourly.time.indexOf(t));
+        const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        tmrwW = {
+          temp: parseFloat(avg(ti.map(i => weatherData.hourly.temperature_2m[i])).toFixed(1)),
+          pressure: Math.round(avg(ti.map(i => weatherData.hourly.surface_pressure[i]))),
+          pressureTrend: parseFloat((weatherData.hourly.surface_pressure[ti[ti.length-1]] - weatherData.hourly.surface_pressure[ti[0]]).toFixed(1)),
+          windSpeed: parseFloat(avg(ti.map(i => weatherData.hourly.wind_speed_10m[i])).toFixed(1)),
+          windDir: Math.round(avg(ti.map(i => weatherData.hourly.wind_direction_10m[i]))),
+          cloudiness: Math.round(avg(ti.map(i => weatherData.hourly.cloud_cover[i]))),
+          rain: parseFloat(ti.map(i => weatherData.hourly.precipitation[i]).reduce((a,b) => a+b, 0).toFixed(1))
+        };
+      }
+      // Hourly for chart
+      const todayDate = now.toISOString().slice(0,10);
+      const todayHours = [15,16,17,18,19,20];
+      todayHourly = todayHours.map(h => {
+        const key = `${todayDate}T${String(h).padStart(2,'0')}:00`;
+        const i = weatherData.hourly.time.indexOf(key);
+        return i >= 0 ? {
+          hour: h,
+          temp: Math.round(weatherData.hourly.temperature_2m[i]),
+          code: weatherData.hourly.weather_code[i],
+          cloud: weatherData.hourly.cloud_cover[i],
+          wind: weatherData.hourly.wind_speed_10m[i],
+          rain: weatherData.hourly.precipitation[i]
+        } : { hour: h, temp: Math.round(todayW.temp), code: 3, cloud: 40, wind: todayW.windSpeed, rain: 0 };
+      });
+      const tmrwHours = [6,9,12,15,18,20];
+      tmrwHourly = tmrwHours.map(h => {
+        const key = `${tmrwDate}T${String(h).padStart(2,'0')}:00`;
+        const i = weatherData.hourly.time.indexOf(key);
+        return i >= 0 ? {
+          hour: h,
+          temp: Math.round(weatherData.hourly.temperature_2m[i]),
+          code: weatherData.hourly.weather_code[i],
+          cloud: weatherData.hourly.cloud_cover[i],
+          wind: weatherData.hourly.wind_speed_10m[i],
+          rain: weatherData.hourly.precipitation[i]
+        } : { hour: h, temp: Math.round(tmrwW.temp), code: 3, cloud: 60, wind: tmrwW.windSpeed, rain: 0.5 };
+      });
+    } else {
+      // Fallback hourly
+      todayHourly = [15,16,17,18,19,20].map(h => ({ hour: h, temp: 12, code: 3, cloud: 40, wind: 3, rain: 0 }));
+      tmrwHourly = [6,9,12,15,18,20].map(h => ({ hour: h, temp: 10, code: 61, cloud: 70, wind: 5, rain: 0.5 }));
+    }
+
+    const todaySun = getSunTimes(selectedLat, selectedLng, now);
+    const tmrwSun = getSunTimes(selectedLat, selectedLng, tomorrow);
+    const moonToday = getMoonPhase(now);
+    const moonTmrw = getMoonPhase(tomorrow);
+    const waterTemp = estimateWaterTemp(todayW.temp, month, isCoastal);
+    const waterTempTmrw = estimateWaterTemp(tmrwW.temp, month, isCoastal);
+
+    // Compute scores
+    const todayParams = {
+      temp: todayW.temp, pressure: todayW.pressure, pressureTrend: todayW.pressureTrend,
+      windSpeed: todayW.windSpeed, windDir: todayW.windDir, cloudiness: todayW.cloudiness, rain: todayW.rain,
+      hour, sunrise: todaySun.sunrise, sunset: todaySun.sunset, dusk: todaySun.dusk,
+      moonPhase: moonToday.phase, month, waterTemp, locationType: placeType
+    };
+    const tmrwParams = {
+      temp: tmrwW.temp, pressure: tmrwW.pressure, pressureTrend: tmrwW.pressureTrend,
+      windSpeed: tmrwW.windSpeed, windDir: tmrwW.windDir, cloudiness: tmrwW.cloudiness, rain: tmrwW.rain,
+      hour: 18, sunrise: tmrwSun.sunrise, sunset: tmrwSun.sunset, dusk: tmrwSun.dusk,
+      moonPhase: moonTmrw.phase, month, waterTemp: waterTempTmrw, locationType: placeType
+    };
+    const todayScore = computeScore(todayParams);
+    const tmrwScore = computeScore(tmrwParams);
+    const todaySpecies = computeSpecies(todayParams, todayScore.total);
+    const tmrwSpecies = computeSpecies(tmrwParams, tmrwScore.total);
+    const todayLures = getLures(todaySpecies);
+    const tmrwLures = getLures(tmrwSpecies);
+    const todayBest = getBestTimes(todaySun, todayW.cloudiness);
+    const tmrwBest = getBestTimes(tmrwSun, tmrwW.cloudiness);
+
+    // Hourly scores for charts
+    const todayHScores = todayHourly.map(h => {
+      const p = { ...todayParams, hour: h.hour, cloudiness: h.cloud, windSpeed: h.wind, rain: h.rain };
+      return { ...h, score: computeScore(p).total };
+    });
+    const tmrwHScores = tmrwHourly.map(h => {
+      const p = { ...tmrwParams, hour: h.hour, cloudiness: h.cloud, windSpeed: h.wind, rain: h.rain };
+      return { ...h, score: computeScore(p).total };
+    });
+
+    // Summary text
+    const buildSummary = (w, sc, sp, day) => {
+      const best = sp.ahven >= sp.hauki && sp.ahven >= sp.kuha ? 'ahven' : sp.hauki >= sp.kuha ? 'hauki' : 'kuha';
+      const trend = w.pressureTrend > 1 ? 'nouseva paine' : w.pressureTrend < -1 ? 'laskeva paine' : 'vakaa paine';
+      return `<strong>${scoreLabel(sc.total)} kalastuspäivä.</strong> ${trend.charAt(0).toUpperCase()+trend.slice(1)}, tuuli ${w.windSpeed} m/s. Paras laji: <strong>${best}</strong>. Veden arvioitu lämpötila <strong>${day === 'today' ? waterTemp : waterTempTmrw}°C</strong>.`;
+    };
+
+    analysisData = {
+      placeName, placeType, coord: `${selectedLat}° N, ${selectedLng}° E · ${placeType.charAt(0).toUpperCase()+placeType.slice(1)}`,
+      usedFallback,
+      today: { w: todayW, score: todayScore, species: todaySpecies, lures: todayLures, best: todayBest, sun: todaySun, moon: moonToday, waterTemp, hScores: todayHScores, summary: buildSummary(todayW, todayScore, todaySpecies, 'today') },
+      tomorrow: { w: tmrwW, score: tmrwScore, species: tmrwSpecies, lures: tmrwLures, best: tmrwBest, sun: tmrwSun, moon: moonTmrw, waterTemp: waterTempTmrw, hScores: tmrwHScores, summary: buildSummary(tmrwW, tmrwScore, tmrwSpecies, 'tomorrow') }
+    };
+
+    updateDayLabels(now, tomorrow);
+    renderResults(currentDay);
+
+  } catch (err) {
+    console.error(err);
+    alert('Virhe analyysissä. Tarkista verkkoyhteys.');
+  }
+
+  showLoading(false);
+  document.getElementById('analyse-btn').disabled = false;
+}
+
+// ─────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────
+function renderResults(day) {
+  if (!analysisData) return;
+  const d = day === 'today' ? analysisData.today : analysisData.tomorrow;
+  const isTmrw = day === 'tomorrow';
+  const c = isTmrw ? 'tmrw-card' : '';
+  const accentColor = isTmrw ? 'var(--amber)' : 'var(--teal)';
+  const hbarClass = isTmrw ? 'hbar-tmrw' : 'hbar-today';
+
+  const el = id => document.getElementById(id);
+  el('welcome').style.display = 'none';
+  const res = el('results');
+  res.style.display = 'flex';
+
+  // API notice
+  const notice = `<div class="api-notice" style="display:${analysisData.usedFallback?'block':'none'}">Varoitus: osa datasta käyttää fallback-arvoja.</div>`;
+
+  // Tomorrow banner
+  const tmrwBanner = isTmrw ? `<div class="tmrw-banner">Huomisen ennuste · Open-Meteo 24h ennuste</div>` : '';
+
+  // Score segs
+  const segCount = Math.round(d.score.total / 20);
+  const segColor = scoreColor(d.score.total);
+  const segs = [0,1,2,3,4].map(i =>
+    `<div class="sseg" style="background:${i<segCount?segColor:'var(--border)'}"></div>`
+  ).join('');
+
+  // Weather grid
+  const wg = (w, wt) => `
+    <div class="witem"><div class="wlabel">Lämpötila</div><div class="wval">${w.temp}<span class="wunit">°C</span></div></div>
+    <div class="witem"><div class="wlabel">Tuuli</div><div class="wval">${w.windSpeed}<span class="wunit">m/s ${windDirText(w.windDir)}</span></div></div>
+    <div class="witem"><div class="wlabel">Paine</div><div class="wval">${w.pressure}<span class="wunit">hPa ${w.pressureTrend>0.5?'↑':w.pressureTrend<-0.5?'↓':'→'}</span></div></div>
+    <div class="witem"><div class="wlabel">Pilvisyys</div><div class="wval">${w.cloudiness}<span class="wunit">%</span></div></div>
+    <div class="witem"><div class="wlabel">Sade</div><div class="wval">${w.rain}<span class="wunit">mm</span></div></div>
+    <div class="witem"><div class="wlabel">Vesi (arvio)</div><div class="wval">${wt}<span class="wunit">°C</span></div></div>`;
+
+  // Hourly chart
+  const maxScore = Math.max(...d.hScores.map(h => h.score), 1);
+  const bars = d.hScores.map(h => {
+    const hPx = Math.round((h.score / maxScore) * 54);
+    return `<div class="hbar-col">
+      <div class="hbar ${hbarClass}" style="height:${hPx}px"></div>
+      <div class="hbar-score">${h.score}</div>
+      <div class="hbar-hr">${String(h.hour).padStart(2,'0')}</div>
+    </div>`;
+  }).join('');
+  const meta = d.hScores.map(h =>
+    `<div class="hm-item"><div class="hm-time">${String(h.hour).padStart(2,'0')}:00</div><div class="hm-icon">${weatherIcon(h.code)}</div><div class="hm-temp">${h.temp}°</div></div>`
+  ).join('');
+
+  // Sun row
+  const sunRow = `
+    <div class="sitem"><div class="sval">${d.sun.sunrise}</div><div class="skey">Nousu</div></div>
+    <div class="sdiv"></div>
+    <div class="sitem"><div class="sval">${Math.floor(d.sun.duration/60)}h ${d.sun.duration%60}m</div><div class="skey">Päivä</div></div>
+    <div class="sdiv"></div>
+    <div class="sitem"><div class="sval">${d.sun.sunset}</div><div class="skey">Lasku</div></div>
+    <div class="sdiv"></div>
+    <div class="sitem"><div class="sval">${d.sun.dusk}</div><div class="skey">Hämärä</div></div>`;
+
+  // Species
+  const spColors = { ahven: 'var(--teal)', hauki: 'var(--amber)', kuha: 'var(--green)' };
+  const speciesBars = ['ahven','hauki','kuha'].map(s =>
+    `<div class="sprow">
+      <div class="spname">${s.charAt(0).toUpperCase()+s.slice(1)}</div>
+      <div class="spbg"><div class="spfill" style="width:${d.species[s]}%;background:${spColors[s]}"></div></div>
+      <div class="spscore" style="color:${spColors[s]}">${d.species[s]}</div>
+    </div>`
+  ).join('');
+
+  // Best times
+  const bestRows = d.best.map(b =>
+    `<div class="btrow"><span class="btlabel">${b.label}</span><span class="btval" style="color:${b.highlight?accentColor:'var(--text-hi)'}">${b.val}${b.highlight?' ★':''}</span></div>`
+  ).join('');
+
+  // Lures
+  const lureHTML = ['ahven','hauki','kuha'].map(s => {
+    const cls = s === 'ahven' ? 'tag-a' : s === 'hauki' ? 'tag-h' : 'tag-k';
+    const tags = d.lures[s].map(t => `<span class="tag ${cls}">${t}</span>`).join('');
+    return `<div class="lure-section"><div class="lure-sp">${s.charAt(0).toUpperCase()+s.slice(1)}</div>${tags}</div>`;
+  }).join('');
+
+  // Vars grid
+  const vars = [
+    ['Lämpötila', `${d.w.temp}°C`],
+    ['Paine', `${d.w.pressure}hPa`],
+    ['P.trendi', `${d.w.pressureTrend>0?'+':''}${d.w.pressureTrend}`],
+    ['Tuuli', `${d.w.windSpeed}m/s`],
+    ['T.suunta', windDirText(d.w.windDir)],
+    ['Pilvisyys', `${d.w.cloudiness}%`],
+    ['Sade', `${d.w.rain}mm`],
+    ['Kuukausi', new Date().toLocaleString('fi',{month:'short'})],
+    ['Vuodenaika', getSeasonName()],
+    ['Vesi', `${d.waterTemp}°C`],
+    ['Sijainti', analysisData.placeType],
+    ['Kutu', getSpawnLabel(new Date().getMonth()+1)],
+    ['Kuu', `${d.moon.phase}%`],
+    ['Kuun vaihe', d.moon.name.split(' ')[0]],
+    ['Syönti', getFeedingLabel(d.score.timeScore)],
+    ['Sää-sc', Math.round(d.score.weatherScore)],
+    ['Aika-sc', Math.round(d.score.timeScore)],
+    ['Kausi-sc', Math.round(d.score.seasonScore)]
+  ];
+  const varGrid = vars.map(([k,v]) =>
+    `<div class="vitem"><div class="vkey">${k}</div><div class="vval">${v}</div></div>`
+  ).join('');
+
+  res.innerHTML = `
+    ${notice}
+    ${tmrwBanner}
+    <div class="card ${c}">
+      <div class="place-row">
+        <div class="pdot" style="background:${accentColor}"></div>
+        <div><div class="pname">${analysisData.placeName}</div><div class="pcoord">${analysisData.coord}</div></div>
+      </div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">${isTmrw?'Kalastusscore · huomenna':'Kalastusscore · tänään'}</div>
+      <div class="score-wrap">
+        <div class="score-num" style="color:${scoreColor(d.score.total)}">${d.score.total}</div>
+        <div class="score-pill" style="${scorePillBg(d.score.total)}">${scoreLabel(d.score.total)}</div>
+      </div>
+      <div class="score-segs">${segs}</div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">${isTmrw?'Sääennuste · '+getTmrwLabel()+' · Open-Meteo':'Nykysää · Open-Meteo'}</div>
+      <div class="wgrid">${wg(d.w, d.waterTemp)}</div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">${isTmrw?'Tuntikohtainen kalastusscore · huomenna':'Tuntikohtainen kalastusscore · seuraavat 6h'}</div>
+      <div class="hchart-bars">${bars}</div>
+      <div class="hchart-meta">${meta}</div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">${isTmrw?'Aurinko ja kuu · huomenna':'Aurinko ja kuu · tänään'}</div>
+      <div class="sun-row">${sunRow}</div>
+      <div style="text-align:center;margin-top:7px"><span class="moon-pill">${d.moon.name} · ${d.moon.phase}%</span></div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">Lajikohtainen analyysi</div>
+      ${speciesBars}
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">${isTmrw?'Paras kalastusaika huomenna':'Paras kalastusaika tänään'}</div>
+      <div class="btwrap">${bestRows}</div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">Viehesuositukset</div>
+      ${lureHTML}
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">18 muuttujaa · v1.5</div>
+      <div class="vgrid">${varGrid}</div>
+    </div>
+    <div class="card ${c}">
+      <div class="ctitle">Yhteenveto</div>
+      <div class="sumbox">${d.summary}</div>
+    </div>`;
+}
+
+function getSeasonName() {
+  const m = new Date().getMonth() + 1;
+  if (m <= 2 || m === 12) return 'Talvi';
+  if (m <= 5) return 'Kevät';
+  if (m <= 8) return 'Kesä';
+  return 'Syksy';
+}
+function getSpawnLabel(m) {
+  if (m === 4 || m === 5) return 'Kevät';
+  if (m === 6) return 'Kuha';
+  return '—';
+}
+function getFeedingLabel(ts) {
+  return ts >= 85 ? 'Korkea' : ts >= 60 ? 'Normaali' : 'Matala';
+}
+function getTmrwLabel() {
+  const d = new Date(); d.setDate(d.getDate()+1);
+  return `${d.getDate()}.${d.getMonth()+1}.`;
+}
+function updateDayLabels(now, tomorrow) {
+  document.getElementById('tab-today').textContent = `Tänään ${now.getDate()}.${now.getMonth()+1}.`;
+  document.getElementById('tab-tmrw').textContent = `Huomenna ${tomorrow.getDate()}.${tomorrow.getMonth()+1}.`;
+}
+
+// ─────────────────────────────────────────────
+// UI CONTROLS
+// ─────────────────────────────────────────────
+function switchDay(day) {
+  currentDay = day;
+  document.getElementById('tab-today').className = 'dtab' + (day==='today'?' active-today':'');
+  document.getElementById('tab-tmrw').className = 'dtab' + (day==='tomorrow'?' active-tmrw':'');
+  if (analysisData) renderResults(day);
+}
+
+function showLoading(on) {
+  document.getElementById('loading-overlay').classList.toggle('show', on);
+}
+function setLoadText(t) { document.getElementById('load-text').textContent = t; }
+
+function refreshData() {
+  if (!selectedLat) { alert('Valitse ensin kalastuspaikka kartalta.'); return; }
+  runAnalysis();
+}
+
+function clearSelection() {
+  selectedLat = null; selectedLng = null;
+  if (marker) { map.removeLayer(marker); marker = null; }
+  document.getElementById('coord-badge').style.display = 'none';
+  document.getElementById('analyse-btn').disabled = true;
+  document.getElementById('welcome').style.display = 'flex';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('results').innerHTML = '';
+  analysisData = null;
+  currentDay = 'today';
+  document.getElementById('tab-today').className = 'dtab active-today';
+  document.getElementById('tab-tmrw').className = 'dtab';
+}
+
+async function downloadPDF() {
+  if (!analysisData) { alert('Aja ensin analyysi.'); return; }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const d = analysisData[currentDay === 'today' ? 'today' : 'tomorrow'];
+    const pd = currentDay === 'today' ? 'Tänään' : 'Huomenna';
+    doc.setFillColor(11, 26, 24); doc.rect(0, 0, 210, 297, 'F');
+    doc.setTextColor(200, 222, 221); doc.setFontSize(18); doc.text('FishCast v1.5', 14, 20);
+    doc.setTextColor(62, 184, 168); doc.setFontSize(11); doc.text(`${pd} · ${analysisData.placeName}`, 14, 28);
+    doc.setTextColor(200, 222, 221); doc.setFontSize(11);
+    doc.text(`Sijainti: ${analysisData.coord}`, 14, 38);
+    doc.text(`Kalastusscore: ${d.score.total} — ${scoreLabel(d.score.total)}`, 14, 46);
+    doc.text(`Lämpötila: ${d.w.temp}°C · Tuuli: ${d.w.windSpeed} m/s · Paine: ${d.w.pressure} hPa`, 14, 54);
+    doc.text(`Veden lämpötila (arvio): ${d.waterTemp}°C`, 14, 62);
+    doc.text(`Auringonnousu: ${d.sun.sunrise} · Auringonlasku: ${d.sun.sunset}`, 14, 70);
+    doc.text(`Kuun vaihe: ${d.moon.name} (${d.moon.phase}%)`, 14, 78);
+    doc.text('Lajianalyysi:', 14, 90);
+    doc.text(`  Ahven: ${d.species.ahven}  ·  Hauki: ${d.species.hauki}  ·  Kuha: ${d.species.kuha}`, 14, 98);
+    doc.text('Paras aika:', 14, 110);
+    d.best.forEach((b, i) => doc.text(`  ${b.label}: ${b.val}`, 14, 118 + i * 8));
+    doc.text('Viehesuositukset:', 14, 145);
+    ['ahven','hauki','kuha'].forEach((s, i) => {
+      doc.text(`  ${s.charAt(0).toUpperCase()+s.slice(1)}: ${d.lures[s].join(', ')}`, 14, 153 + i * 8);
+    });
+    doc.setTextColor(61, 110, 106);
+    doc.setFontSize(8);
+    doc.text(`Raportti luotu: ${new Date().toLocaleString('fi')} · FishCast v1.5`, 14, 285);
+    doc.save(`fishcast_${analysisData.placeName.replace(/[^a-zA-Z0-9]/g,'_')}_${pd}.pdf`);
+  } catch (e) {
+    console.error(e);
+    alert('PDF-vienti epäonnistui.');
+  }
+}
+</script>
+</body>
+</html>
