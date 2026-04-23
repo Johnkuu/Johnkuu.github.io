@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hierarkia-generaattori</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
+    --border:#2a2a30;--border2:#38383f;
+    --accent:#5b7fff;--accent2:#3d5adb;
+    --text:#e8e8ed;--text2:#8f8f9e;--text3:#5a5a6e;
+    --success:#3ecf8e;--danger:#ff5f5f;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-weight:300}
+  header{border-bottom:1px solid var(--border);padding:1.25rem 2rem;display:flex;align-items:center;gap:1rem;background:var(--surface)}
+  .logo{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+  .logo-sep{width:1px;height:20px;background:var(--border2)}
+  .logo-sub{font-size:12px;color:var(--text3);font-family:var(--mono)}
+  .main{display:grid;grid-template-columns:380px 1fr;gap:0;min-height:calc(100vh - 57px)}
+  .sidebar{border-right:1px solid var(--border);background:var(--surface);padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;overflow-y:auto}
+  .content{padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;overflow-y:auto}
+  .section-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:.75rem}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12px;color:var(--text2);font-family:var(--mono)}
+  input[type="text"],select,textarea{background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;transition:border-color .15s;width:100%}
+  input[type="text"]:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  select option{background:#1e1e22}
+  textarea{resize:vertical;min-height:220px;line-height:1.6}
+  .btn{padding:8px 16px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:var(--mono);letter-spacing:.04em;transition:all .15s;white-space:nowrap}
+  .btn:hover{background:var(--surface2);color:var(--text)}
+  .btn-accent{background:var(--accent2);border-color:var(--accent);color:#fff;font-weight:500}
+  .btn-accent:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn-pdf{background:#1a3a1a;border-color:#3ecf8e;color:#3ecf8e;font-weight:500}
+  .btn-pdf:hover{background:#2a5a2a;border-color:#3ecf8e;color:#3ecf8e}
+  .btn-pdf:disabled{opacity:.4;cursor:not-allowed}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:4px;background:#1e2a4a;color:var(--accent);border:1px solid #2a3a6a;letter-spacing:.04em}
+  .msg{font-family:var(--mono);font-size:11px;margin-top:4px;min-height:16px}
+  .msg.ok{color:var(--success)}.msg.err{color:var(--danger)}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .panel-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2)}
+  .panel-title{font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase}
+  .panel-body{padding:1rem;overflow:auto;max-height:280px}
+  pre{font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap;word-break:break-all}
+  .stats{display:flex;gap:1rem;flex-wrap:wrap}
+  .stat{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--mono)}
+  .stat-val{font-size:22px;color:var(--text);font-weight:500}
+  .stat-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
+  .copy-flash{font-family:var(--mono);font-size:11px;color:var(--success);transition:opacity .3s}
+  .divider{border:none;border-top:1px solid var(--border);margin:0}
+  .hidden{display:none!important}
+  /* tabs */
+  .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface2)}
+  .tab{padding:9px 18px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;transition:all .15s;user-select:none}
+  .tab:hover{color:var(--text2)}.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab-panel{display:none}.tab-panel.active{display:block}
+  /* canvas */
+  #graphCanvas{width:100%;height:520px;background:var(--bg);border-radius:0 0 8px 8px;display:block;cursor:default;user-select:none}
+  .canvas-toolbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .canvas-hint{font-family:var(--mono);font-size:10px;color:var(--text3);margin-left:auto}
+  #tooltipBubble{position:fixed;background:#252530;border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--text2);pointer-events:none;z-index:999;max-width:220px;display:none}
+  .tree-pre .node-root{color:#5b7fff;font-weight:500}.tree-pre .node-cat{color:#7dd3c0}
+  .tree-pre .node-item{color:#8f8f9e}.tree-pre .node-tip{color:#5a5a6e}.tree-pre .branch{color:#5a5a6e}
+  /* pdf progress */
+  #pdfProgress{display:none;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;color:var(--text3)}
+  #pdfBar{height:3px;background:var(--success);border-radius:2px;transition:width .2s;width:0}
+  #pdfBarTrack{flex:1;height:3px;background:var(--border2);border-radius:2px;overflow:hidden}
+  @media(max-width:800px){.main{grid-template-columns:1fr}.sidebar{border-right:none;border-bottom:1px solid var(--border)}}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">Hierarkia</span>
+  <div class="logo-sep"></div>
+  <span class="logo-sub">generaattori + visuaalinen editori + PDF</span>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <div>
+      <div class="section-label">Rakenne</div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Juurisolmun nimi</label>
+        <input type="text" id="rootName" value="Ajoneuvot"/>
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Sarakkeiden erotinmerkki</label>
+        <select id="sepSel">
+          <option value="tab">Sarkain (Tab) — Excel-oletusasetus</option>
+          <option value=",">Pilkku (,)</option>
+          <option value=";">Puolipiste (;)</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Luokittelu-sarake</label>
+        <select id="catCol">
+          <option value="1">Sarake 2 (oletus)</option>
+          <option value="0">Sarake 1</option>
+          <option value="2">Sarake 3</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tooltip / kuvaus</label>
+        <select id="tooltipCol">
+          <option value="2">Sarake 3 (Kuvaus)</option>
+          <option value="0">Sarake 1</option>
+          <option value="1">Sarake 2</option>
+          <option value="none">Ei tooltippiä</option>
+        </select>
+      </div>
+    </div>
+    <hr class="divider">
+    <div>
+      <div class="section-label">Data <span class="tag">liitä Excelistä</span></div>
+      <textarea id="dataInput" spellcheck="false">Viite	Luokittelu	Kuvaus
+2025-XXX-XXX	Auto	Vanhat mobiilit
+2025-XXX-XXX	Moottoripyörä	Uudet pyörät
+2025-XXX-XXX	Auto	Pakettiauto
+2025-XXX-XXX	Lentokoneet	Yksitasoiset
+2025-XXX-XXX	Auto	Pikkuauto
+2025-XXX-XXX	Auto	Isoauto</textarea>
+      <div class="msg" id="parseMsg"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-accent" onclick="generate()">Luo hierarkia</button>
+      <button class="btn" onclick="clearAll()">Tyhjennä</button>
+    </div>
+    <div id="pdfProgress">
+      <span id="pdfProgressLabel">PDF...</span>
+      <div id="pdfBarTrack"><div id="pdfBar"></div></div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div id="emptyState" style="display:flex;align-items:center;justify-content:center;flex:1;flex-direction:column;gap:12px;opacity:.3">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <rect x="18" y="4" width="12" height="8" rx="2" fill="#5b7fff"/>
+        <rect x="4" y="24" width="12" height="8" rx="2" fill="#5b7fff"/>
+        <rect x="18" y="24" width="12" height="8" rx="2" fill="#5b7fff"/>
+        <rect x="32" y="24" width="12" height="8" rx="2" fill="#5b7fff"/>
+        <line x1="24" y1="12" x2="24" y2="24" stroke="#5b7fff" stroke-width="1.5"/>
+        <line x1="10" y1="24" x2="24" y2="16" stroke="#5b7fff" stroke-width="1.5"/>
+        <line x1="38" y1="24" x2="24" y2="16" stroke="#5b7fff" stroke-width="1.5"/>
+      </svg>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">Liitä data ja paina "Luo hierarkia"</span>
+    </div>
+
+    <div id="resultSection" class="hidden">
+      <div class="stats" id="statsRow"></div>
+
+      <div class="panel">
+        <div class="tab-bar">
+          <div class="tab active" id="tab-graph" onclick="switchTab('graph')">Visuaalinen — raahattava</div>
+          <div class="tab" id="tab-tree" onclick="switchTab('tree')">Tekstipuu</div>
+          <div class="tab" id="tab-xml" onclick="switchTab('xml')">draw.io XML</div>
+        </div>
+
+        <!-- GRAPH -->
+        <div id="tabpanel-graph" class="tab-panel active">
+          <div class="canvas-toolbar">
+            <button class="btn" onclick="resetLayout()" style="font-size:11px;padding:5px 12px">Resetoi</button>
+            <button class="btn" onclick="zoomIn()" style="font-size:13px;padding:4px 10px">＋</button>
+            <button class="btn" onclick="zoomOut()" style="font-size:13px;padding:4px 10px">－</button>
+            <button class="btn" onclick="fitView()" style="font-size:11px;padding:5px 12px">Sovita</button>
+            <button class="btn btn-pdf" id="pdfBtn" onclick="exportPDF()" style="font-size:11px;padding:5px 14px">⬇ Lataa PDF</button>
+            <span class="canvas-hint">Raahaa solmuja · scroll=zoom · drag tyhjä=panoroi</span>
+          </div>
+          <svg id="graphCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+
+        <!-- TREE -->
+        <div id="tabpanel-tree" class="tab-panel">
+          <div class="panel-body">
+            <div class="tree-pre" id="treePreview" style="font-family:var(--mono);font-size:12px;color:var(--text2);line-height:1.9;white-space:pre"></div>
+          </div>
+        </div>
+
+        <!-- XML -->
+        <div id="tabpanel-xml" class="tab-panel">
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;background:var(--surface2)">
+            <button class="btn" onclick="copyXml()">Kopioi XML</button>
+            <button class="btn" onclick="downloadXml()">Lataa .xml</button>
+            <span class="copy-flash" id="copyMsg"></span>
+          </div>
+          <div class="panel-body"><pre id="xmlOut"></pre></div>
+        </div>
+      </div>
+
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text3);line-height:1.8;padding:.5rem 0">
+        draw.io import: <span style="color:var(--text2)">Extras → Edit Diagram → liitä XML → OK</span>
+        &nbsp;·&nbsp; PDF toimii <span style="color:var(--success)">offline</span>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="tooltipBubble"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let lastXml="", lastCats={}, lastRoot="";
+let graphNodes=[], graphEdges=[];
+let svgScale=1, svgOffset={x:0,y:0};
+let dragState=null, panState=null;
+
+const CAT_COLORS=["#4A7CC7","#2E8B6E","#8B5A2B","#6A4CA0","#B85C38","#2E7A8E","#A04C6A","#5A7A2E"];
+const ITEM_BG   =["#1a2a40","#192e28","#2b2018","#231c35","#2e1e19","#192832","#2a1922","#1d2616"];
+
+// ═══════════════════════════════════════════════════════════
+//  PARSE
+// ═══════════════════════════════════════════════════════════
+function getSep(){const v=document.getElementById("sepSel").value;return v==="tab"?"\t":v}
+
+function parseData(){
+  const raw=document.getElementById("dataInput").value.trim();
+  const sep=getSep();
+  const catIdx=parseInt(document.getElementById("catCol").value);
+  const tipIdx=document.getElementById("tooltipCol").value;
+  const lines=raw.split(/\r?\n/).filter(l=>l.trim());
+  const rows=[];
+  for(const line of lines){
+    const cols=line.split(sep);
+    if(cols.length<2)continue;
+    rows.push(cols.map(c=>c.trim()));
+  }
+  if(!rows.length)return null;
+  const firstCat=rows[0][catIdx]||"";
+  const isHeader=/^[a-zA-ZäöåÄÖÅ\s]+$/.test(firstCat)&&rows.length>1;
+  const data=isHeader?rows.slice(1):rows;
+  const cats={};
+  for(const r of data){
+    const cat=r[catIdx]||"Muut";
+    if(!cats[cat])cats[cat]=[];
+    const label=r.filter((_,i)=>i!==catIdx).join(" — ");
+    const tooltip=tipIdx!=="none"?(r[parseInt(tipIdx)]||""):"";
+    cats[cat].push({label,tooltip});
+  }
+  return{cats,total:data.length};
+}
+
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+
+// ═══════════════════════════════════════════════════════════
+//  GRAPH LAYOUT
+// ═══════════════════════════════════════════════════════════
+function buildLayout(rootName,cats){
+  graphNodes=[];graphEdges=[];
+  const catList=Object.keys(cats);
+  const ROOT_W=160,ROOT_H=50,CAT_W=150,CAT_H=46,ITEM_W=160,ITEM_H=44;
+  const H_GAP=24,V_GAP=28,LEVEL_GAP=70,CAT_GAP=50;
+  const catLayouts=catList.map(cat=>{const n=cats[cat].length;return{bandW:n*ITEM_W+(n-1)*H_GAP}});
+  const totalW=catLayouts.reduce((s,l)=>s+l.bandW,0)+(catList.length-1)*CAT_GAP;
+  const rootY=40,catY=rootY+ROOT_H+LEVEL_GAP,rootX=totalW/2-ROOT_W/2;
+  graphNodes.push({id:"root",label:rootName,type:"root",x:rootX,y:rootY,w:ROOT_W,h:ROOT_H,color:"#2F5496",textColor:"#ffffff",tooltip:""});
+  let curX=0;
+  catList.forEach((cat,ci)=>{
+    const items=cats[cat],bandW=catLayouts[ci].bandW;
+    const catColor=CAT_COLORS[ci%CAT_COLORS.length],itemBg=ITEM_BG[ci%ITEM_BG.length];
+    const catNodeX=curX+bandW/2-CAT_W/2,catId="cat_"+ci;
+    graphNodes.push({id:catId,label:cat,type:"cat",x:catNodeX,y:catY,w:CAT_W,h:CAT_H,color:catColor,textColor:"#ffffff",tooltip:""});
+    graphEdges.push({from:"root",to:catId});
+    items.forEach((item,ii)=>{
+      const itemX=curX+ii*(ITEM_W+H_GAP),itemY=catY+CAT_H+V_GAP,itemId="item_"+ci+"_"+ii;
+      graphNodes.push({id:itemId,label:item.label,type:"item",x:itemX,y:itemY,w:ITEM_W,h:ITEM_H,color:itemBg,textColor:"#c8c8d8",stroke:catColor,tooltip:item.tooltip});
+      graphEdges.push({from:catId,to:itemId});
+    });
+    curX+=bandW+CAT_GAP;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SVG RENDER
+// ═══════════════════════════════════════════════════════════
+function getNodeById(id){return graphNodes.find(n=>n.id===id)}
+
+function edgePoints(fn,tn){
+  const x1=fn.x+fn.w/2,y1=fn.y+fn.h,x2=tn.x+tn.w/2,y2=tn.y,midY=(y1+y2)/2;
+  return`M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`;
+}
+
+function renderGraph(){
+  const svg=document.getElementById("graphCanvas");
+  svg.innerHTML="";
+  const defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
+  defs.innerHTML=`<marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3a3a50"/></marker>`;
+  svg.appendChild(defs);
+  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+  g.setAttribute("id","graphGroup");
+  g.setAttribute("transform",`translate(${svgOffset.x},${svgOffset.y}) scale(${svgScale})`);
+  svg.appendChild(g);
+  for(const edge of graphEdges){
+    const fn=getNodeById(edge.from),tn=getNodeById(edge.to);
+    if(!fn||!tn)continue;
+    const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d",edgePoints(fn,tn));
+    path.setAttribute("fill","none");path.setAttribute("stroke","#2e2e3e");
+    path.setAttribute("stroke-width","1.5");path.setAttribute("marker-end","url(#arr)");
+    g.appendChild(path);
+  }
+  for(const node of graphNodes){
+    const grp=document.createElementNS("http://www.w3.org/2000/svg","g");
+    grp.setAttribute("data-node-id",node.id);grp.setAttribute("cursor","grab");
+    const rect=document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("x",node.x);rect.setAttribute("y",node.y);
+    rect.setAttribute("width",node.w);rect.setAttribute("height",node.h);
+    rect.setAttribute("rx",node.type==="root"?8:6);rect.setAttribute("fill",node.color);
+    rect.setAttribute("stroke",node.stroke||node.color);rect.setAttribute("stroke-width",node.type==="item"?1.5:0);
+    grp.appendChild(rect);
+    const words=node.label.split(" "),lineH=node.type==="item"?13:15,maxW=node.w-12;
+    const fontSize=node.type==="root"?13:node.type==="cat"?12:10;
+    const lines=[]; let cur="";
+    for(const w of words){
+      const test=cur?cur+" "+w:w;
+      if(test.length*fontSize*0.55>maxW&&cur){lines.push(cur);cur=w}else{cur=test}
+    }
+    if(cur)lines.push(cur);
+    const totalTextH=lines.length*lineH,textStartY=node.y+node.h/2-totalTextH/2+lineH*0.75;
+    lines.forEach((line,li)=>{
+      const txt=document.createElementNS("http://www.w3.org/2000/svg","text");
+      txt.setAttribute("x",node.x+node.w/2);txt.setAttribute("y",textStartY+li*lineH);
+      txt.setAttribute("text-anchor","middle");txt.setAttribute("font-family","'IBM Plex Mono',monospace");
+      txt.setAttribute("font-size",fontSize);txt.setAttribute("fill",node.textColor);
+      txt.setAttribute("pointer-events","none");
+      if(node.type==="root"||node.type==="cat")txt.setAttribute("font-weight","500");
+      txt.textContent=line;grp.appendChild(txt);
+    });
+    g.appendChild(grp);
+    grp.addEventListener("mousedown",e=>startDrag(e,node.id));
+    grp.addEventListener("touchstart",e=>startDragTouch(e,node.id),{passive:false});
+    if(node.tooltip){
+      grp.addEventListener("mouseenter",e=>showTooltip(e,node.tooltip));
+      grp.addEventListener("mousemove",moveTooltip);
+      grp.addEventListener("mouseleave",hideTooltip);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DRAG
+// ═══════════════════════════════════════════════════════════
+function svgPoint(e){
+  const svg=document.getElementById("graphCanvas"),rect=svg.getBoundingClientRect();
+  return{x:(e.clientX-rect.left-svgOffset.x)/svgScale,y:(e.clientY-rect.top-svgOffset.y)/svgScale};
+}
+function startDrag(e,nodeId){
+  e.preventDefault();e.stopPropagation();
+  const node=getNodeById(nodeId),pt=svgPoint(e);
+  dragState={nodeId,startMouseX:pt.x,startMouseY:pt.y,startNodeX:node.x,startNodeY:node.y};
+  document.getElementById("graphCanvas").style.cursor="grabbing";
+}
+document.addEventListener("mousemove",e=>{
+  if(dragState){
+    const pt=svgPoint(e),node=getNodeById(dragState.nodeId);
+    node.x=dragState.startNodeX+(pt.x-dragState.startMouseX);
+    node.y=dragState.startNodeY+(pt.y-dragState.startMouseY);
+    renderGraph();return;
+  }
+  if(panState){
+    svgOffset.x=panState.startOffsetX+(e.clientX-panState.startMouseX);
+    svgOffset.y=panState.startOffsetY+(e.clientY-panState.startMouseY);
+    renderGraph();
+  }
+});
+document.addEventListener("mouseup",()=>{
+  dragState=null;panState=null;
+  const c=document.getElementById("graphCanvas");if(c)c.style.cursor="default";
+});
+
+function initCanvasEvents(){
+  const svg=document.getElementById("graphCanvas");
+  svg.addEventListener("mousedown",e=>{
+    if(e.target===svg||e.target.tagName==="path"||e.target.tagName==="defs"||e.target.id==="graphGroup"){
+      panState={startMouseX:e.clientX,startMouseY:e.clientY,startOffsetX:svgOffset.x,startOffsetY:svgOffset.y};
+    }
+  });
+  svg.addEventListener("wheel",e=>{
+    e.preventDefault();
+    const factor=e.deltaY<0?1.1:0.9;
+    const rect=svg.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+    svgOffset.x=mx-(mx-svgOffset.x)*factor;svgOffset.y=my-(my-svgOffset.y)*factor;
+    svgScale*=factor;renderGraph();
+  },{passive:false});
+}
+
+function svgPointFromTouch(touch){
+  const svg=document.getElementById("graphCanvas"),rect=svg.getBoundingClientRect();
+  return{x:(touch.clientX-rect.left-svgOffset.x)/svgScale,y:(touch.clientY-rect.top-svgOffset.y)/svgScale};
+}
+function startDragTouch(e,nodeId){
+  e.preventDefault();
+  const node=getNodeById(nodeId),pt=svgPointFromTouch(e.touches[0]);
+  dragState={nodeId,startMouseX:pt.x,startMouseY:pt.y,startNodeX:node.x,startNodeY:node.y};
+}
+document.addEventListener("touchmove",e=>{
+  if(!dragState)return;e.preventDefault();
+  const pt=svgPointFromTouch(e.touches[0]),node=getNodeById(dragState.nodeId);
+  node.x=dragState.startNodeX+(pt.x-dragState.startMouseX);node.y=dragState.startNodeY+(pt.y-dragState.startMouseY);
+  renderGraph();
+},{passive:false});
+document.addEventListener("touchend",()=>{dragState=null});
+
+function zoomIn(){svgScale*=1.15;renderGraph()}
+function zoomOut(){svgScale/=1.15;renderGraph()}
+function fitView(){
+  if(!graphNodes.length)return;
+  const svg=document.getElementById("graphCanvas"),W=svg.clientWidth||800,H=svg.clientHeight||520;
+  const minX=Math.min(...graphNodes.map(n=>n.x)),maxX=Math.max(...graphNodes.map(n=>n.x+n.w));
+  const minY=Math.min(...graphNodes.map(n=>n.y)),maxY=Math.max(...graphNodes.map(n=>n.y+n.h));
+  const pw=maxX-minX,ph=maxY-minY,pad=40;
+  svgScale=Math.min((W-pad*2)/pw,(H-pad*2)/ph,1.5);
+  svgOffset.x=pad-minX*svgScale+(W-pw*svgScale)/2-pad;
+  svgOffset.y=pad-minY*svgScale+(H-ph*svgScale)/2-pad;
+  renderGraph();
+}
+function resetLayout(){
+  const result=parseData();if(!result)return;
+  buildLayout(document.getElementById("rootName").value.trim()||"Juuri",result.cats);
+  svgScale=1;svgOffset={x:20,y:20};fitView();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOOLTIP
+// ═══════════════════════════════════════════════════════════
+function showTooltip(e,text){const b=document.getElementById("tooltipBubble");b.textContent=text;b.style.display="block";moveTooltip(e)}
+function moveTooltip(e){const b=document.getElementById("tooltipBubble");b.style.left=(e.clientX+14)+"px";b.style.top=(e.clientY+14)+"px"}
+function hideTooltip(){document.getElementById("tooltipBubble").style.display="none"}
+
+// ═══════════════════════════════════════════════════════════
+//  XML BUILD
+// ═══════════════════════════════════════════════════════════
+function buildXml(rootName,cats){
+  const catList=Object.keys(cats);
+  const ROOT_W=160,ROOT_H=50,CAT_W=150,CAT_H=46,ITEM_W=160,ITEM_H=44;
+  const H_GAP=20,V_GAP=20,LEVEL_GAP=80,CAT_GAP=60;
+  const CC=["#4A7CC7","#2E8B6E","#8B5A2B","#6A4CA0","#B85C38","#2E7A8E","#A04C6A","#5A7A2E"];
+  const IB=["#EBF3FB","#E8F5EE","#FBF0E6","#F0EAF8","#FBECE7","#E6F5F8","#FAE8F0","#EFF6E6"];
+  const catLayouts=catList.map(cat=>{const n=cats[cat].length;return{bandW:n*ITEM_W+(n-1)*H_GAP}});
+  const totalW=catLayouts.reduce((s,l)=>s+l.bandW,0)+(catList.length-1)*CAT_GAP;
+  const rootY=40,catY=rootY+ROOT_H+LEVEL_GAP,rootX=totalW/2-ROOT_W/2;
+  let id=2;const cells=[];
+  cells.push(`<mxCell id="0"/>`);cells.push(`<mxCell id="1" parent="0"/>`);
+  const rootId=id++;
+  cells.push(`<mxCell id="${rootId}" value="${esc(rootName)}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2F5496;fontColor=#ffffff;strokeColor=#1e3a6e;fontStyle=1;fontSize=13;" vertex="1" parent="1"><mxGeometry x="${rootX}" y="${rootY}" width="${ROOT_W}" height="${ROOT_H}" as="geometry"/></mxCell>`);
+  let curX=0;
+  catList.forEach((cat,ci)=>{
+    const items=cats[cat],bandW=catLayouts[ci].bandW;
+    const catColor=CC[ci%CC.length],itemBg=IB[ci%IB.length];
+    const catNodeX=curX+bandW/2-CAT_W/2,catId=id++;
+    cells.push(`<mxCell id="${catId}" value="${esc(cat)}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=${catColor};fontColor=#ffffff;strokeColor=#1e3a6e;fontStyle=1;fontSize=12;" vertex="1" parent="1"><mxGeometry x="${catNodeX}" y="${catY}" width="${CAT_W}" height="${CAT_H}" as="geometry"/></mxCell>`);
+    cells.push(`<mxCell id="${id++}" style="edgeStyle=orthogonalEdgeStyle;" edge="1" source="${rootId}" target="${catId}" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>`);
+    items.forEach((item,ii)=>{
+      const itemX=curX+ii*(ITEM_W+H_GAP),itemCenterX=itemX+ITEM_W/2;
+      const exitX=Math.min(.95,Math.max(.05,parseFloat(((itemCenterX-catNodeX)/CAT_W).toFixed(4))));
+      const itemY=catY+CAT_H+V_GAP,itemId=id++;
+      const tip=item.tooltip?` tooltip="${esc(item.tooltip)}"`:""
+      cells.push(`<mxCell id="${itemId}" value="${esc(item.label)}"${tip} style="rounded=1;whiteSpace=wrap;html=1;fillColor=${itemBg};strokeColor=${catColor};fontSize=10;" vertex="1" parent="1"><mxGeometry x="${itemX}" y="${itemY}" width="${ITEM_W}" height="${ITEM_H}" as="geometry"/></mxCell>`);
+      cells.push(`<mxCell id="${id++}" style="edgeStyle=orthogonalEdgeStyle;exitX=${exitX};exitY=1;exitDx=0;exitDy=0;entryX=.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="${catId}" target="${itemId}" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>`);
+    });
+    curX+=bandW+CAT_GAP;
+  });
+  return`<mxGraphModel><root>\n${cells.join("\n")}\n</root></mxGraphModel>`;
+}
+
+function buildTreePreview(rootName,cats){
+  const catList=Object.keys(cats);
+  let html=`<span class="node-root">${rootName}</span>\n`;
+  catList.forEach((cat,ci)=>{
+    const isLastCat=ci===catList.length-1;
+    html+=`<span class="branch">${isLastCat?"└── ":"├── "}</span><span class="node-cat">${cat}</span>\n`;
+    cats[cat].forEach((item,ii)=>{
+      const isLast=ii===cats[cat].length-1,indent=isLastCat?"    ":"│   ";
+      html+=`<span class="branch">${indent}${isLast?"└── ":"├── "}</span><span class="node-item">${item.label}</span>`;
+      if(item.tooltip)html+=`  <span class="node-tip">[${item.tooltip}]</span>`;
+      html+="\n";
+    });
+  });
+  return html;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  PURE-JS PDF GENERATOR  — flow layout, no dependencies
+//  Uses an offscreen Canvas to measure text accurately,
+//  then emits a well-formed PDF 1.4 binary.
+// ═══════════════════════════════════════════════════════════
+const PDF = (() => {
+  // ── PDF string escape ───────────────────────────────────
+  function ps(s){
+    // keep latin-1, drop non-latin chars
+    let out="";
+    for(let i=0;i<s.length;i++){
+      const c=s.charCodeAt(i);
+      if(c===40)out+="\\(";
+      else if(c===41)out+="\\)";
+      else if(c===92)out+="\\\\";
+      else if(c<256)out+=s[i];
+      else out+="?";
+    }
+    return out;
+  }
+  function hex2rgb(h){
+    h=h.replace("#","");
+    return[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
+  }
+  function r3(n){return+(Math.round(n+"e+3")+"e-3");}
+  function rgb(h){const[r,g,b]=hex2rgb(h);return`${r3(r)} ${r3(g)} ${r3(b)}`;}
+
+  // ── Text measurement via offscreen canvas ───────────────
+  const _mc=document.createElement("canvas").getContext("2d");
+  function measureText(txt,sz,bold,italic){
+    _mc.font=`${italic?"italic ":""}${bold?"bold ":""}${sz}px Helvetica,Arial,sans-serif`;
+    return _mc.measureText(txt).width*0.77; // canvas→pt scale approx
+  }
+
+  // ── Word-wrap: returns array of lines ───────────────────
+  function wrapText(txt,maxW,sz,bold,italic){
+    if(!txt)return[""];
+    const words=txt.split(" ");
+    const lines=[];
+    let cur="";
+    for(const w of words){
+      const test=cur?cur+" "+w:w;
+      if(measureText(test,sz,bold,italic)>maxW&&cur){lines.push(cur);cur=w;}
+      else cur=test;
+    }
+    if(cur)lines.push(cur);
+    return lines.length?lines:[""];
+  }
+
+  // ── Flow engine ─────────────────────────────────────────
+  // A4: 595 x 842 pt
+  const PW=595,PH=842;
+  const ML=18*2.835,MR=18*2.835,MT=22*2.835,MB=18*2.835;
+  const HEADER_H=14*2.835, FOOTER_H=10*2.835;
+  const CW=PW-ML-MR;
+  const CONTENT_TOP=PH-MT;   // y in PDF coords (0=bottom)
+  const CONTENT_BOT=MB;
+
+  function build(rootName,cats){
+    const now=new Date();
+    const dateStr=now.toLocaleDateString("fi-FI")+" "+now.toLocaleTimeString("fi-FI",{hour:"2-digit",minute:"2-digit"});
+    const catList=Object.keys(cats);
+    const totalItems=catList.reduce((s,c)=>s+cats[c].length,0);
+    const totalNodes=totalItems+catList.length+1;
+
+    // Each "cmd" goes to a page's stream
+    const pages=[];
+    let page=[];
+    let y=CONTENT_TOP;
+
+    function pushPage(){pages.push(page);page=[];y=CONTENT_TOP;}
+    function needY(h){if(y-h<CONTENT_BOT){pushPage();}return true;}
+
+    // ── drawing primitives ──────────────────────────────
+    function fillRect(x,yb,w,h,color){
+      // yb = PDF y of bottom-left corner
+      page.push(`${rgb(color)} rg ${r3(x)} ${r3(yb)} ${r3(w)} ${r3(h)} re f`);
+    }
+    function strokeRect(x,yb,w,h,color,lw){
+      page.push(`${rgb(color)} RG ${r3(lw||0.5)} w ${r3(x)} ${r3(yb)} ${r3(w)} ${r3(h)} re S`);
+    }
+    function hline(x1,x2,yy,color,lw){
+      page.push(`${rgb(color)} RG ${r3(lw||0.4)} w ${r3(x1)} ${r3(yy)} m ${r3(x2)} ${r3(yy)} l S`);
+    }
+    function vline(xx,y1,y2,color,lw){
+      page.push(`${rgb(color)} RG ${r3(lw||0.4)} w ${r3(xx)} ${r3(y1)} m ${r3(xx)} ${r3(y2)} l S`);
+    }
+    // drawText: baseline at yb
+    function drawText(txt,x,yb,sz,bold,italic,color,align){
+      if(!txt)return;
+      const fn=bold?"/F2":italic?"/F3":"/F1";
+      let tx=x;
+      if(align==="right") tx=x-measureText(txt,sz,bold,italic);
+      if(align==="center")tx=x-measureText(txt,sz,bold,italic)/2;
+      page.push(`${rgb(color||"#222222")} rg BT ${fn} ${r3(sz)} Tf ${r3(tx)} ${r3(yb)} Td (${ps(txt)}) Tj ET`);
+    }
+
+    // ── header + footer are injected at stream level ─────
+    function headerFooterStream(pageNum){
+      const lines=[];
+      const htitle=rootName+" — Hierarkiaraportti";
+      // header bg
+      lines.push(`${rgb("#2F5496")} rg ${r3(0)} ${r3(PH-HEADER_H)} ${r3(PW)} ${r3(HEADER_H)} re f`);
+      lines.push(`${rgb("#ffffff")} rg BT /F2 11 Tf ${r3(ML)} ${r3(PH-HEADER_H+4)} Td (${ps(htitle)}) Tj ET`);
+      lines.push(`${rgb("#ddddee")} rg BT /F1 8.5 Tf ${r3(PW-MR-measureText(dateStr,8.5,false,false))} ${r3(PH-HEADER_H+5)} Td (${ps(dateStr)}) Tj ET`);
+      // footer bg
+      lines.push(`${rgb("#f2f2f6")} rg ${r3(0)} ${r3(0)} ${r3(PW)} ${r3(FOOTER_H)} re f`);
+      const ftxt="Solmuja yhteensä: "+totalNodes;
+      lines.push(`${rgb("#888899")} rg BT /F1 8 Tf ${r3(ML)} ${r3(3.5*2.835)} Td (${ps(ftxt)}) Tj ET`);
+      const ptxt="Sivu "+pageNum;
+      lines.push(`${rgb("#888899")} rg BT /F1 8 Tf ${r3(PW-MR-measureText(ptxt,8,false,false))} ${r3(3.5*2.835)} Td (${ps(ptxt)}) Tj ET`);
+      return lines.join("\n");
+    }
+
+    // ── Title ────────────────────────────────────────────
+    const titleSz=26,titleH=32,subtitleSz=9,subtitleH=14;
+    needY(titleH+subtitleH+20);
+    y-=titleH;
+    drawText(rootName,ML,y,titleSz,true,false,"#2F5496");
+    y-=subtitleH;
+    drawText("Hierarkiaraportti  ·  "+dateStr,ML,y,subtitleSz,false,false,"#888899");
+    y-=8;
+    hline(ML,PW-MR,y,"#ccccdd",0.5);
+    y-=16;
+
+    // ── Stats row ─────────────────────────────────────────
+    const statH=52, sw=CW/3;
+    needY(statH+10);
+    fillRect(ML,y-statH,CW,statH,"#f8f8fc");
+    strokeRect(ML,y-statH,CW,statH,"#ccccdd",0.5);
+    vline(ML+sw,   y-statH,y,"#ccccdd",0.5);
+    vline(ML+sw*2, y-statH,y,"#ccccdd",0.5);
+    const stats=[{v:String(totalItems),l:"RIVIÄ"},{v:String(catList.length),l:"KATEGORIAA"},{v:String(totalNodes),l:"SOLMUJA"}];
+    stats.forEach((s,i)=>{
+      const cx=ML+i*sw+sw/2;
+      drawText(s.v, cx,y-20,24,true,false,"#2F5496","center");
+      drawText(s.l, cx,y-statH+8,8,false,false,"#888899","center");
+    });
+    y-=statH+14;
+
+    // ── Categories ───────────────────────────────────────
+    const CAT_COLORS_L=["#4A7CC7","#2E8B6E","#8B5A2B","#6A4CA0","#B85C38","#2E7A8E","#A04C6A","#5A7A2E"];
+    const CAT_LIGHT_L =["#EBF3FB","#E8F5EE","#FBF0E6","#F0EAF8","#FBECE7","#E6F5F8","#FAE8F0","#EFF6E6"];
+    const half=(CW-2)/2;
+    const CELL_PAD_X=8, CELL_PAD_Y=6;
+    const LABEL_SZ=8.5, TIP_SZ=8, LABEL_LH=12, TIP_LH=11;
+
+    // measure a cell's height
+    function cellHeight(item){
+      const lblLines=wrapText(item.label,half-CELL_PAD_X*2,LABEL_SZ,false,false);
+      let h=CELL_PAD_Y*2+lblLines.length*LABEL_LH;
+      if(item.tooltip){
+        const tipLines=wrapText(item.tooltip,half-CELL_PAD_X*2,TIP_SZ,false,true);
+        h+=3+tipLines.length*TIP_LH;
+      }
+      return Math.max(h,28);
+    }
+
+    catList.forEach((cat,ci)=>{
+      const items=cats[cat];
+      const cc=CAT_COLORS_L[ci%CAT_COLORS_L.length];
+      const lc=CAT_LIGHT_L[ci%CAT_LIGHT_L.length];
+      const catHdrH=28;
+
+      // Pair items into rows
+      const itemRows=[];
+      for(let i=0;i<items.length;i+=2)
+        itemRows.push([items[i],items[i+1]||null]);
+
+      // Measure all row heights
+      const rowHeights=itemRows.map(([a,b])=>Math.max(cellHeight(a),b?cellHeight(b):0));
+      const totalBlockH=catHdrH+rowHeights.reduce((s,h)=>s+h,0);
+
+      // If entire block fits on current page, keep together; else just ensure header fits
+      if(y-totalBlockH<CONTENT_BOT&&y-catHdrH-rowHeights[0]<CONTENT_BOT){
+        pushPage();
+      } else {
+        needY(catHdrH+8);
+      }
+
+      // Draw cat header
+      y-=8; // gap before
+      fillRect(ML,y-catHdrH,CW,catHdrH,cc);
+      drawText(`${cat}  (${items.length} kpl)`,ML+8,y-catHdrH+8,11,true,false,"#ffffff");
+      y-=catHdrH;
+
+      // Draw rows
+      itemRows.forEach(([itemA,itemB],ri)=>{
+        const rh=rowHeights[ri];
+        needY(rh);
+        const rowTop=y, rowBot=y-rh;
+        const xA=ML, xB=ML+half+2;
+
+        // Left cell
+        fillRect(xA,rowBot,half,rh,lc);
+        strokeRect(xA,rowBot,half,rh,"#d8d8e8",0.4);
+        const lblLinesA=wrapText(itemA.label,half-CELL_PAD_X*2,LABEL_SZ,false,false);
+        let ty=rowTop-CELL_PAD_Y-LABEL_LH+2;
+        lblLinesA.forEach(ln=>{drawText(ln,xA+CELL_PAD_X,ty,LABEL_SZ,false,false,"#222233");ty-=LABEL_LH;});
+        if(itemA.tooltip){
+          ty-=2;
+          wrapText(itemA.tooltip,half-CELL_PAD_X*2,TIP_SZ,false,true).forEach(ln=>{
+            drawText(ln,xA+CELL_PAD_X,ty,TIP_SZ,false,true,"#555566");ty-=TIP_LH;
+          });
+        }
+
+        // Right cell
+        if(itemB){
+          fillRect(xB,rowBot,half,rh,lc);
+          strokeRect(xB,rowBot,half,rh,"#d8d8e8",0.4);
+          const lblLinesB=wrapText(itemB.label,half-CELL_PAD_X*2,LABEL_SZ,false,false);
+          let ty2=rowTop-CELL_PAD_Y-LABEL_LH+2;
+          lblLinesB.forEach(ln=>{drawText(ln,xB+CELL_PAD_X,ty2,LABEL_SZ,false,false,"#222233");ty2-=LABEL_LH;});
+          if(itemB.tooltip){
+            ty2-=2;
+            wrapText(itemB.tooltip,half-CELL_PAD_X*2,TIP_SZ,false,true).forEach(ln=>{
+              drawText(ln,xB+CELL_PAD_X,ty2,TIP_SZ,false,true,"#555566");ty2-=TIP_LH;
+            });
+          }
+        }
+        y=rowBot;
+      });
+      y-=4; // gap after
+    });
+
+    // flush last page
+    if(page.length>0)pages.push(page);
+
+    // ── Emit PDF ─────────────────────────────────────────
+    let out="%PDF-1.4\n%\xFF\xFF\xFF\xFF\n";
+    const xref={};
+
+    function addObj(id,content){
+      xref[id]=out.length;
+      out+=`${id} 0 obj\n${content}\nendobj\n`;
+    }
+
+    const CAT_OBJ=1,PAGES_OBJ=2,RES_OBJ=3;
+    let nextId=4;
+    const pageIds=[],streamIds=[];
+    pages.forEach(()=>{pageIds.push(nextId++);streamIds.push(nextId++)});
+
+    addObj(CAT_OBJ,`<< /Type /Catalog /Pages ${PAGES_OBJ} 0 R >>`);
+    addObj(PAGES_OBJ,`<< /Type /Pages /Kids [${pageIds.map(id=>`${id} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+    addObj(RES_OBJ,`<<\n  /Font <<\n    /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\n    /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\n    /F3 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>\n  >>\n>>`);
+
+    pages.forEach((cmds,i)=>{
+      const hf=headerFooterStream(i+1);
+      const body=cmds.join("\n");
+      const stream=hf+"\n"+body;
+      const sid=streamIds[i],pid=pageIds[i];
+      addObj(sid,`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+      addObj(pid,`<< /Type /Page /Parent ${PAGES_OBJ} 0 R /MediaBox [0 0 ${PW} ${PH}] /Contents ${sid} 0 R /Resources ${RES_OBJ} 0 R >>`);
+    });
+
+    const xrefOffset=out.length;
+    const maxId=Math.max(...Object.keys(xref).map(Number));
+    out+="xref\n";
+    out+=`0 ${maxId+2}\n`;
+    out+="0000000000 65535 f \n";
+    for(let i=1;i<=maxId+1;i++){
+      const off=xref[i]!=null?xref[i]:0;
+      out+=String(off).padStart(10,"0")+" 00000 n \n";
+    }
+    out+=`trailer\n<< /Size ${maxId+2} /Root ${CAT_OBJ} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+    return out;
+  }
+
+  return{build};
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  PDF EXPORT
+// ═══════════════════════════════════════════════════════════
+async function exportPDF(){
+  if(!Object.keys(lastCats).length){alert("Luo hierarkia ensin.");return}
+  const btn=document.getElementById("pdfBtn");
+  const prog=document.getElementById("pdfProgress");
+  const bar=document.getElementById("pdfBar");
+  const lbl=document.getElementById("pdfProgressLabel");
+  btn.disabled=true;prog.style.display="flex";
+  lbl.textContent="Rakennetaan PDF...";bar.style.width="30%";
+  await new Promise(r=>setTimeout(r,20));
+  try{
+    lbl.textContent="Generoidaan sivut...";bar.style.width="60%";
+    await new Promise(r=>setTimeout(r,10));
+    const pdfOut=PDF.build(lastRoot,lastCats);
+    bar.style.width="90%";lbl.textContent="Ladataan...";
+    await new Promise(r=>setTimeout(r,10));
+    const bytes=new Uint8Array(pdfOut.length);
+    for(let i=0;i<pdfOut.length;i++)bytes[i]=pdfOut.charCodeAt(i)&0xff;
+    const blob=new Blob([bytes],{type:"application/pdf"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=(lastRoot||"hierarkia").replace(/\s+/g,"_")+"_raportti.pdf";a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    bar.style.width="100%";lbl.textContent="✓ Valmis";
+    setTimeout(()=>{prog.style.display="none";bar.style.width="0"},1500);
+  }catch(e){
+    lbl.textContent="Virhe: "+e.message;console.error(e);
+  }
+  btn.disabled=false;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  GENERATE (main)
+// ═══════════════════════════════════════════════════════════
+function generate(){
+  const rootName=document.getElementById("rootName").value.trim()||"Juuri";
+  const msg=document.getElementById("parseMsg");
+  const result=parseData();
+  if(!result){msg.textContent="Dataa ei löydy. Tarkista erotinmerkki ja sisältö.";msg.className="msg err";return}
+  const{cats,total}=result;
+  const nCats=Object.keys(cats).length;
+  msg.textContent=`Parsittu: ${total} riviä, ${nCats} kategoriaa.`;msg.className="msg ok";
+  lastCats=cats;lastRoot=rootName;
+
+  document.getElementById("statsRow").innerHTML=`
+    <div class="stat"><div class="stat-val">${total}</div><div class="stat-lbl">Riviä</div></div>
+    <div class="stat"><div class="stat-val">${nCats}</div><div class="stat-lbl">Kategoriaa</div></div>
+    <div class="stat"><div class="stat-val">${total+nCats+1}</div><div class="stat-lbl">Solmua</div></div>`;
+
+  const xml=buildXml(rootName,cats);
+  lastXml=xml;
+  document.getElementById("xmlOut").textContent=xml;
+  document.getElementById("treePreview").innerHTML=buildTreePreview(rootName,cats);
+  buildLayout(rootName,cats);
+  svgScale=1;svgOffset={x:20,y:20};
+  document.getElementById("emptyState").classList.add("hidden");
+  document.getElementById("resultSection").classList.remove("hidden");
+  document.getElementById("copyMsg").textContent="";
+  setTimeout(()=>fitView(),50);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TABS / XML EXPORT / CLEAR
+// ═══════════════════════════════════════════════════════════
+function switchTab(name){
+  ["graph","tree","xml"].forEach(t=>{
+    document.getElementById("tab-"+t).classList.toggle("active",t===name);
+    document.getElementById("tabpanel-"+t).classList.toggle("active",t===name);
+  });
+  if(name==="graph")setTimeout(renderGraph,30);
+}
+function copyXml(){
+  if(!lastXml)return;
+  navigator.clipboard.writeText(lastXml).then(()=>{
+    const el=document.getElementById("copyMsg");el.textContent="✓ kopioitu";
+    setTimeout(()=>el.textContent="",2000);
+  });
+}
+function downloadXml(){
+  if(!lastXml)return;
+  const blob=new Blob([lastXml],{type:"application/xml"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=(lastRoot||"hierarchy").replace(/\s+/g,"_")+"_drawio.xml";a.click();
+}
+function clearAll(){
+  document.getElementById("dataInput").value="";
+  document.getElementById("parseMsg").textContent="";
+  document.getElementById("parseMsg").className="msg";
+  document.getElementById("resultSection").classList.add("hidden");
+  document.getElementById("emptyState").classList.remove("hidden");
+  lastXml="";lastCats={};lastRoot="";graphNodes=[];graphEdges=[];
+}
+
+window.addEventListener("load",initCanvasEvents);
+</script>
+</body>
+</html>
