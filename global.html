@@ -223,17 +223,61 @@ button:hover{background:var(--bg3);color:var(--text);}
         <div class="stat" style="grid-column:1/-1"><div class="slbl">Data file</div><div class="sval sm" id="sf">No file loaded</div></div>
       </div>
       <div id="fsec">
-        <div class="flbl">Load data from CSV or Excel</div>
-        <div id="fdrop"
-          onclick="document.getElementById('finput').click()"
-          ondragover="dragOver(event)"
-          ondragleave="dragLeave()"
-          ondrop="dropFile(event)">
-          <div class="fdi">&#128194;</div>
-          <div class="fdt">Click to upload or drag &amp; drop</div>
-          <div class="fds">CSV or Excel (.xlsx, .xls) &middot; CountryName, Reference, Description</div>
-        </div>
-        <input type="file" id="finput" accept=".csv,.xlsx,.xls" onchange="loadFile(event)">
+
+<div class="flbl">Load data from CSV</div>
+
+<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px;">
+  <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;">
+    Expected file format
+  </div>
+
+  <div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:10px;">
+    The import file must contain the following columns exactly as written:
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);">CountryName</th>
+          <th style="text-align:left;padding:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);">Reference</th>
+          <th style="text-align:left;padding:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px;border:1px solid var(--border);color:var(--text2);">Finland</td>
+          <td style="padding:6px;border:1px solid var(--border);color:var(--text2);">FI-001</td>
+          <td style="padding:6px;border:1px solid var(--border);color:var(--text2);">Strategic partner account</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;border:1px solid var(--border);color:var(--text2);">Germany</td>
+          <td style="padding:6px;border:1px solid var(--border);color:var(--text2);">DE-204</td>
+          <td style="padding:6px;border:1px solid var(--border);color:var(--text2);">Regional distributor</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:10px;font-size:10px;color:var(--text3);line-height:1.6;">
+    • Country names must match official English country names.<br>
+    • Header row is required.<br>
+    • Supported file types: CSV.<br>
+    • Each row creates one target entry on the map.
+  </div>
+</div>
+
+<div id="fdrop"
+  onclick="document.getElementById('finput').click()"
+  ondragover="dragOver(event)"
+  ondragleave="dragLeave()"
+  ondrop="dropFile(event)">
+  <div class="fdi">&#128194;</div>
+  <div class="fdt">Click to upload or drag &amp; drop</div>
+  <div class="fds">CSV &middot; CountryName, Reference, Description</div>
+</div>
+<input type="file" id="finput" accept=".csv" onchange="loadFile(event)">
+
       </div>
       <div id="listsec">
         <div class="lhdr">
@@ -241,7 +285,7 @@ button:hover{background:var(--bg3);color:var(--text);}
           <span id="lc" style="color:var(--text3)">0 entries</span>
         </div>
         <div id="tlist">
-          <div class="empty">No data loaded.<br>Upload a CSV or Excel file<br>to see targets on the map.</div>
+          <div class="empty">No data loaded.<br>Upload a CSV file<br>to see targets on the map.</div>
         </div>
       </div>
     </div>
@@ -983,7 +1027,7 @@ function updateStats(){
 function renderList(){
   const tl=document.getElementById('tlist');
   if(!targets.length){
-    tl.innerHTML='<div class="empty">No data loaded.<br>Upload a CSV or Excel file<br>to see targets on the map.</div>';
+    tl.innerHTML='<div class="empty">No data loaded.<br>Upload a CSV file<br>to see targets on the map.</div>';
     return;
   }
   getCounts();
@@ -1017,7 +1061,7 @@ function processFile(file){
     const r=new FileReader(); r.onload=ev=>parseCSV(ev.target.result,file.name); r.readAsText(file);
   } else if(nm.endsWith('.xlsx')||nm.endsWith('.xls')){
     const r=new FileReader(); r.onload=ev=>parseXLSX(ev.target.result,file.name); r.readAsArrayBuffer(file);
-  } else { alert('Please upload a .csv or .xlsx/.xls file.'); }
+  } else { alert('Please upload a .csv file.'); }
 }
 
 function parseCSV(text,filename){
@@ -1145,7 +1189,7 @@ function clearData(){
   document.getElementById('fdrop').innerHTML=
     '<div class="fdi">\uD83D\uDCC2</div>'+
     '<div class="fdt">Click to upload or drag &amp; drop</div>'+
-    '<div class="fds">CSV or Excel (.xlsx, .xls) \u00b7 CountryName, Reference, Description</div>';
+    '<div class="fds">CSV \u00b7 CountryName, Reference, Description</div>';
   renderMap(); updateStats(); renderList();
 }
 
@@ -1183,4 +1227,4 @@ function hideTooltip(){document.getElementById('tooltip').classList.remove('show
 // ── INIT ──────────────────────────────────────────────────────
 initZoomPan();
 loadMapData();
-</script></body></html>
+</script></body></html> 
