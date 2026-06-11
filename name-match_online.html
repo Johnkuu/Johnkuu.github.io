@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name match — duplicate finder</title>
+<!-- SheetJS (xlsx) 0.20.3, @e965/xlsx fork, Apache-2.0 - embedded in the offline build name-match.html. -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --paper:#f6f5f1; --card:#ffffff; --ink:#1b1b18; --muted:#6c6b64; --hint:#9a9991;
+  --line:rgba(27,27,24,.12); --line2:rgba(27,27,24,.22);
+  --accent:#34406b; --accent-soft:#eceef6;
+  --ok:#1d7a4d; --ok-bg:#e7f3ec; --likely:#235ea3; --likely-bg:#e8f0f9;
+  --review:#9a5b00; --review-bg:#f7eede; --uniq:#6c6b64; --uniq-bg:#efeee9;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --paper:#17171a; --card:#1f1f22; --ink:#ececec; --muted:#a3a39c; --hint:#7c7c76;
+    --line:rgba(255,255,255,.12); --line2:rgba(255,255,255,.22);
+    --accent:#aeb8e6; --accent-soft:#262a3c;
+    --ok:#5fc78f; --ok-bg:#143025; --likely:#82b0e6; --likely-bg:#10243a;
+    --review:#e0a94e; --review-bg:#312611; --uniq:#a3a39c; --uniq-bg:#26262a; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.55;
+  -webkit-font-smoothing:antialiased;font-size:15px}
+.wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:14px;margin:6px 0 0}
+.privacy{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:12.5px;color:var(--muted);
+  background:var(--accent-soft);border:1px solid var(--line);padding:6px 11px;border-radius:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-top:22px}
+.eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--hint);font-weight:600;margin:0 0 14px}
+.drop{border:1.5px dashed var(--line2);border-radius:12px;padding:34px;text-align:center;cursor:pointer;
+  transition:border-color .15s,background .15s;color:var(--muted)}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{color:var(--ink);font-weight:600}
+.fileline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:14px}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);border:1px solid var(--line);
+  padding:7px 12px;border-radius:9px;font-family:var(--mono);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:20px;align-items:end;margin-top:18px}
+label.fld{display:block;font-size:13px;color:var(--muted);margin-bottom:8px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);padding:9px 14px;font:inherit;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--accent);color:#fff}
+.btn{border:1px solid var(--line2);background:var(--card);color:var(--ink);font:inherit;font-size:14px;
+  padding:10px 18px;border-radius:9px;cursor:pointer;transition:background .12s,transform .05s}
+.btn:hover{background:var(--accent-soft)}.btn:active{transform:scale(.985)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+.btn.primary:hover{filter:brightness(1.06)}
+.chkrow{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:13.5px;color:var(--muted)}
+.chkrow input{accent-color:var(--accent);width:16px;height:16px}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:8px}
+.progress>div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.metric{background:var(--paper);border-radius:11px;padding:15px 16px}
+.metric .k{font-size:12.5px;color:var(--muted)}
+.metric .v{font-size:25px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+.tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:4px 0 14px}
+.pill{font-size:13px;padding:7px 13px;border-radius:9px;border:1px solid var(--line2);background:transparent;
+  color:var(--muted);cursor:pointer;font:inherit}
+.pill.on{background:var(--accent-soft);color:var(--ink);border-color:var(--accent)}
+.search{flex:1;min-width:160px;border:1px solid var(--line2);background:var(--card);color:var(--ink);
+  border-radius:9px;padding:9px 12px;font:inherit;font-size:13.5px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:10px 12px;border-top:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--hint);font-weight:600;
+  position:sticky;top:0;background:var(--card)}
+.tbl-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+td.g,td.s,td.m{font-family:var(--mono);color:var(--muted)}
+td.s,td.m{text-align:right;font-variant-numeric:tabular-nums}
+tr.band td{background:var(--paper)}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:7px;font-weight:500}
+.tag.Certain{background:var(--ok-bg);color:var(--ok)} .tag.Likely{background:var(--likely-bg);color:var(--likely)}
+.tag.Review{background:var(--review-bg);color:var(--review)} .tag.Unique{background:var(--uniq-bg);color:var(--uniq)}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;font-size:13px;color:var(--muted)}
+.hidden{display:none}
+.note{font-size:12.5px;color:var(--review);background:var(--review-bg);border-radius:9px;padding:9px 12px;margin-top:14px}
+.foot{margin-top:30px;font-size:12.5px;color:var(--hint);line-height:1.7}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Name match — duplicate finder</h1>
+    <p class="sub">Reads names from column A (FullName), groups likely duplicates, and writes the results into the adjacent columns. Order-independent token matching with Jaro–Winkler similarity; blocking runs automatically in the background.</p>
+    <span class="privacy"><span aria-hidden="true">●</span> Runs entirely in your browser. No data is uploaded anywhere.</span>
+  </header>
+
+  <!-- 1. INPUT -->
+  <section class="card">
+    <p class="eyebrow">1 · Data</p>
+    <div id="drop" class="drop">
+      <p style="margin:0 0 6px"><strong>Drop an .xlsx, .xls or .csv file here</strong>, or click to browse</p>
+      <p style="margin:0;font-size:13px">Names must be in column A. A header row named “FullName” is detected automatically.</p>
+      <input id="file" type="file" accept=".xlsx,.xls,.csv" class="hidden">
+    </div>
+    <div id="loaded" class="hidden" style="margin-top:4px">
+      <div class="fileline">
+        <span class="chip"><span aria-hidden="true">▦</span> <span id="fname">file.xlsx</span></span>
+        <span id="rowcount" style="color:var(--muted)"></span>
+        <button id="reset" class="btn" style="margin-left:auto;padding:8px 14px">Change file</button>
+      </div>
+      <label class="chkrow"><input id="hdr" type="checkbox"> First row is a header</label>
+    </div>
+  </section>
+
+  <!-- 2. SETTINGS -->
+  <section id="settings" class="card hidden">
+    <p class="eyebrow">2 · Settings</p>
+    <div class="grid">
+      <div>
+        <label class="fld">Match threshold — <span id="thv" style="color:var(--ink);font-weight:600;font-family:var(--mono)">0.80</span></label>
+        <input id="th" type="range" min="0.65" max="0.98" step="0.01" value="0.80">
+      </div>
+      <div>
+        <label class="fld">Bias</label>
+        <div class="seg" id="bias">
+          <button data-v="0.72" data-theta="0.88">Recall</button>
+          <button data-v="0.80" data-theta="0.90" class="on">Balanced</button>
+          <button data-v="0.85" data-theta="0.93">Precision</button>
+        </div>
+      </div>
+      <div>
+        <button id="run" class="btn primary" style="width:100%">Run comparison</button>
+      </div>
+    </div>
+    <label class="chkrow" style="margin-top:16px"><input id="fold" type="checkbox" checked> Fold accents and special characters before matching (recommended; uses Unicode folding, e.g. ä→a, ö→o, ü→u)</label>
+    <p style="font-size:12.5px;color:var(--color,#6c6b64);color:var(--muted);margin:10px 0 0;line-height:1.6">
+      <strong style="font-weight:600;color:var(--ink)">Tip.</strong> The three modes trade recall against precision. <strong style="font-weight:600;color:var(--ink)">Recall</strong> finds more potential matches (lower bar); <strong style="font-weight:600;color:var(--ink)">Precision</strong> keeps only stronger ones. You can also drag the slider for fine control — a lower threshold surfaces more, but less certain, matches. Pairs that score just below the threshold are not merged but are listed under <strong style="font-weight:600;color:var(--ink)">Review candidates</strong> for you to judge.
+    </p>
+    <div id="progwrap" class="hidden" style="margin-top:18px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)">
+        <span id="progtext">Working…</span><span id="progpct">0%</span>
+      </div>
+      <div class="progress"><div id="progbar"></div></div>
+    </div>
+  </section>
+
+  <!-- 3. RESULTS -->
+  <section id="results" class="card hidden">
+    <p class="eyebrow">3 · Results</p>
+    <div class="cards">
+      <div class="metric"><div class="k">Rows</div><div class="v" id="mRows">0</div></div>
+      <div class="metric"><div class="k">Duplicate groups</div><div class="v" id="mGroups">0</div></div>
+      <div class="metric"><div class="k">Rows in groups</div><div class="v" id="mDupRows">0</div></div>
+      <div class="metric"><div class="k">Comparisons</div><div class="v" id="mComp">0</div></div>
+    </div>
+    <div id="skipnote" class="note hidden"></div>
+
+    <div class="tools" style="margin-top:20px">
+      <button class="pill filt on" data-f="all">All</button>
+      <button class="pill filt" data-f="Certain">Certain</button>
+      <button class="pill filt" data-f="Likely">Likely</button>
+      <button class="pill filt" data-f="Review">Review</button>
+      <button class="pill filt" data-f="Unique">Unique</button>
+      <input id="search" class="search" placeholder="Search a name…">
+      <button id="export" class="btn primary">Export .xlsx</button>
+    </div>
+    <label class="chkrow" style="margin:-4px 0 14px"><input id="onlydup" type="checkbox" checked> Show only potential duplicates (groups of 2+)</label>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:90px">Group</th><th>FullName (A)</th>
+          <th style="width:80px;text-align:right">Score</th><th style="width:140px">Match</th>
+          <th style="width:90px;text-align:right">Members</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span id="pageinfo"></span>
+      <span>
+        <button id="prev" class="btn" style="padding:6px 12px">Prev</button>
+        <button id="next" class="btn" style="padding:6px 12px">Next</button>
+      </span>
+    </div>
+
+    <div id="reviewBox" class="hidden" style="margin-top:28px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <p style="font-size:14px;font-weight:600;margin:0">Review candidates</p>
+        <span id="reviewCount" style="font-size:12.5px;color:var(--muted)"></span>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">Pairs that scored just below the match threshold, so they were <em>not</em> merged. These are the genuinely ambiguous cases — e.g. an added middle name, or a shared surname with partial overlap. Inspect and decide for yourself; lower the threshold (or pick Recall) if you want them grouped.</p>
+      <div class="tbl-wrap">
+        <table>
+          <colgroup><col><col><col style="width:80px"></colgroup>
+          <thead><tr><th>Name</th><th>Possible match</th><th style="text-align:right">Score</th></tr></thead>
+          <tbody id="reviewBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">
+    Method: each name is lowercased, accents are optionally folded (Unicode NFD, e.g. ä→a, ö→o, ü→u, with explicit rules for ß→ss, ø→o, æ→ae), name particles are merged (al, van, de, mc, … so “Al-Sayed” and “Alsayed” agree), and the name is split into tokens; single-letter initials are ignored for scoring. Records are compared regardless of word order using Soft TF-IDF: token similarity is Jaro–Winkler, and each token is weighted by its corpus rarity (IDF), so common names contribute little and distinctive names dominate. Candidate pairs are restricted by automatic blocking (shared exact tokens and shared two-token prefixes), so the tool scales to large files without comparing every pair. Grouping uses chaining-resistant star clustering: each group forms around a seed and a record joins only if it is similar to that seed, which prevents distinct people from being chained into one large cluster. Score is the strongest similarity linking a row to its group: Certain ≥ 0.95, Likely ≥ 0.88, Review ≥ threshold.<br>
+    References: Christen, P. (2012). <em>Data Matching.</em> Springer. · Cohen, W. W., Ravikumar, P., &amp; Fienberg, S. E. (2003). A comparison of string distance metrics for name-matching tasks. <em>IIWeb-03</em>, 73–78.
+  </p>
+</div>
+
+<!-- ===================== WORKER (not executed inline) ===================== -->
+<script id="worker-src" type="javascript/worker">
+var PARTICLES={al:1,el:1,van:1,von:1,de:1,del:1,della:1,di:1,da:1,du:1,le:1,la:1,
+  bin:1,ibn:1,ben:1,abu:1,mac:1,mc:1,st:1,san:1,santa:1,der:1,den:1,ter:1,ten:1,zu:1,dos:1,das:1,af:1,av:1};
+var FOLD=true;
+var FOLDMAP={"ß":"ss","ø":"o","æ":"ae","œ":"oe","ł":"l","đ":"d","ð":"d","þ":"th","ı":"i","ʼ":"","'":""};
+function foldDiacritics(s){ s=s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  return s.replace(/[ßøæœłđðþıʼ']/g,function(c){return FOLDMAP[c]!=null?FOLDMAP[c]:c;}); }
+function normalize(s){ if(s==null) return ""; s=String(s).toLowerCase();
+  if(FOLD) s=foldDiacritics(s);
+  s=s.replace(/[\u2010-\u2015\-]/g," "); s=s.replace(/[.,;:'"`()\[\]/\\]/g," ");
+  s=s.replace(/\s+/g," ").trim(); return s; }
+function mergeParticles(toks){ var out=[],i=0,n=toks.length;
+  while(i<n){ if(PARTICLES[toks[i]] && i+1<n){ var c=""; while(i<n && PARTICLES[toks[i]]){ c+=toks[i]; i++; }
+      if(i<n){ c+=toks[i]; i++; } out.push(c); }
+    else { out.push(toks[i]); i++; } }
+  return out; }
+function stoks(name){ var t=normalize(name); if(!t) return [];
+  t=mergeParticles(t.split(" ").filter(Boolean));
+  return t.filter(function(x){return x.length>1;}); }
+// Jaro-Winkler with reused scratch buffers + charCode compare (allocation-free hot path)
+var SCRATCH=128, MA=new Uint8Array(SCRATCH), MB=new Uint8Array(SCRATCH);
+function jw_slow(a,b){ if(a===b) return 1; if(!a.length||!b.length) return 0;
+  var md=Math.floor(Math.max(a.length,b.length)/2)-1; if(md<0)md=0;
+  var ma=new Array(a.length).fill(false), mb=new Array(b.length).fill(false), m=0;
+  for(var i=0;i<a.length;i++){ var lo=Math.max(0,i-md),hi=Math.min(i+md+1,b.length);
+    for(var j=lo;j<hi;j++){ if(mb[j]||a[i]!==b[j])continue; ma[i]=true;mb[j]=true;m++;break; } }
+  if(m===0)return 0; var t=0,k=0;
+  for(var i=0;i<a.length;i++){ if(!ma[i])continue; while(!mb[k])k++; if(a[i]!==b[k])t++; k++; } t/=2;
+  var jaro=(m/a.length+m/b.length+(m-t)/m)/3;
+  var p=0,mp=Math.min(4,a.length,b.length); while(p<mp&&a[p]===b[p])p++;
+  return jaro+p*0.1*(1-jaro); }
+function jw(a,b){ if(a===b) return 1; var la=a.length, lb=b.length; if(!la||!lb) return 0;
+  if(la>SCRATCH||lb>SCRATCH) return jw_slow(a,b);
+  var mx=la>lb?la:lb, md=(mx>>1)-1; if(md<0)md=0;
+  for(var i=0;i<la;i++)MA[i]=0; for(var j=0;j<lb;j++)MB[j]=0;
+  var m=0;
+  for(var i=0;i<la;i++){ var lo=i-md>0?i-md:0, hi=i+md+1<lb?i+md+1:lb, ci=a.charCodeAt(i);
+    for(var j=lo;j<hi;j++){ if(MB[j]||ci!==b.charCodeAt(j))continue; MA[i]=1;MB[j]=1;m++;break; } }
+  if(m===0)return 0; var t=0,k=0;
+  for(var i=0;i<la;i++){ if(!MA[i])continue; while(!MB[k])k++; if(a.charCodeAt(i)!==b.charCodeAt(k))t++; k++; } t/=2;
+  var jaro=(m/la+m/lb+(m-t)/m)/3;
+  var p=0,mp=la<lb?la:lb; if(mp>4)mp=4; while(p<mp&&a.charCodeAt(p)===b.charCodeAt(p))p++;
+  return jaro+p*0.1*(1-jaro); }
+function blockKeys(st){ var t=Array.from(new Set(st)).sort(), keys=[]; if(!t.length) return keys;
+  for(var i=0;i<t.length;i++) keys.push("T:"+t[i]);
+  if(t.length>=2){ var p=t.map(function(x){return x.slice(0,3);}); var lim=Math.min(t.length,3);
+    for(var i=0;i<lim;i++) for(var j=i+1;j<lim;j++) keys.push("P:"+p[i]+"#"+p[j]); }
+  return keys; }
+var THETA=0.90;
+function run(names, threshold, theta){
+  theta=(theta!==undefined?theta:THETA);
+  var MAXBUCKET=2500, n=names.length;
+  var reviewFloor=Math.max(0.60, threshold-0.15), nmiss=[], nmTrunc=false, NMCAP=200000;
+  var toks=new Array(n), uniq=new Array(n);
+  for(var i=0;i<n;i++){ toks[i]=stoks(names[i]); uniq[i]=Array.from(new Set(toks[i])); }
+  var id=Object.create(null), id2s=[], df=[];
+  for(var i=0;i<n;i++) for(var k=0;k<uniq[i].length;k++){ var tk=uniq[i][k];
+    if(id[tk]===undefined){ id[tk]=id2s.length; id2s.push(tk); df.push(0); } df[id[tk]]++; }
+  var T=id2s.length, idf=new Float64Array(T);
+  for(var t=0;t<T;t++) idf[t]=Math.log((n+1)/df[t]);
+  var uid=new Array(n), ulen=new Array(n), W=new Array(n);
+  for(var i=0;i<n;i++){ var u=uniq[i], a=new Int32Array(u.length), L=new Int32Array(u.length), w=new Float64Array(u.length), ss=0;
+    for(var k=0;k<u.length;k++){ var ii=id[u[k]]; a[k]=ii; L[k]=u[k].length; var v=idf[ii]; w[k]=v; ss+=v*v; }
+    var nm=Math.sqrt(ss)||1; for(var k=0;k<w.length;k++) w[k]/=nm; uid[i]=a; ulen[i]=L; W[i]=w; }
+  var RB=new Float64Array(32), RW=new Float64Array(32), CB=new Float64Array(32), CW=new Float64Array(32);
+  // each token-pair jw computed once; both directions derived; length pre-filter skips unreachable cells
+  function sim(i,j){
+    var ua=uid[i], la=ulen[i], wa=W[i], ub2=uid[j], lb=ulen[j], wb=W[j], na=ua.length, nb=ub2.length;
+    for(var x=0;x<na;x++){ RB[x]=0; RW[x]=0; } for(var y=0;y<nb;y++){ CB[y]=0; CW[y]=0; }
+    for(var x=0;x<na;x++){ var lax=la[x], sax=id2s[ua[x]];
+      for(var y=0;y<nb;y++){ var lby=lb[y], mn=lax<lby?lax:lby, mx=lax>lby?lax:lby;
+        if(0.6*((2+mn/mx)/3)+0.4 < theta) continue;
+        var v=jw(sax,id2s[ub2[y]]);
+        if(v>RB[x]){ RB[x]=v; RW[x]=wb[y]; } if(v>CB[y]){ CB[y]=v; CW[y]=wa[x]; } } }
+    var dab=0; for(var x=0;x<na;x++){ if(RB[x]>=theta) dab+=wa[x]*RW[x]*RB[x]; }
+    var dba=0; for(var y=0;y<nb;y++){ if(CB[y]>=theta) dba+=wb[y]*CW[y]*CB[y]; }
+    return (dab+dba)/2; }
+  var buckets=Object.create(null);
+  for(var i=0;i<n;i++){ var ks=blockKeys(toks[i]); for(var k=0;k<ks.length;k++){ (buckets[ks[k]]||(buckets[ks[k]]=[])).push(i); } }
+  var adj=new Array(n); for(var i=0;i<n;i++) adj[i]=[];
+  var keys=Object.keys(buckets), total=keys.length, step=Math.max(1,Math.floor(total/100));
+  var comparisons=0, skipped=0, SH=16, seen=new Array(SH);
+  for(var s_=0;s_<SH;s_++) seen[s_]=new Set();
+  for(var b=0;b<total;b++){ var arr=buckets[keys[b]];
+    if(arr.length>=2){ if(arr.length>MAXBUCKET){ skipped++; }
+      else for(var x=0;x<arr.length;x++) for(var y=x+1;y<arr.length;y++){
+        var i=arr[x], j=arr[y]; var lo=i<j?i:j, hi=i<j?j:i, pk=lo*n+hi;
+        var sh=seen[hi&(SH-1)]; if(sh.has(pk)) continue; sh.add(pk); comparisons++;
+        var sc=sim(i,j);
+        if(sc>=threshold){ adj[i].push([j,sc]); adj[j].push([i,sc]); }
+        else if(sc>=reviewFloor){ if(nmiss.length<NMCAP) nmiss.push([i,j,sc]); else nmTrunc=true; } } }
+    if(b%step===0) postMessage({type:"progress", pct:Math.round(b/total*85)}); }
+  postMessage({type:"progress", pct:88});
+  var order=new Array(n); for(var i=0;i<n;i++) order[i]=i;
+  order.sort(function(a,bb){ return adj[bb].length-adj[a].length; });
+  var groupNum=new Int32Array(n), assigned=new Uint8Array(n), best=new Float32Array(n), g=0;
+  for(var oi=0;oi<n;oi++){ var u=order[oi]; if(assigned[u]) continue;
+    g++; groupNum[u]=g; assigned[u]=1; var nb=adj[u], seedBest=0;
+    for(var t2=0;t2<nb.length;t2++){ var v=nb[t2][0], sc=nb[t2][1];
+      if(!assigned[v]){ assigned[v]=1; groupNum[v]=g; if(sc>best[v]) best[v]=sc; if(sc>seedBest) seedBest=sc; } }
+    if(seedBest>best[u]) best[u]=seedBest; }
+  postMessage({type:"progress", pct:96});
+  var members=new Int32Array(n), cnt=Object.create(null);
+  for(var i=0;i<n;i++) cnt[groupNum[i]]=(cnt[groupNum[i]]||0)+1;
+  for(var i=0;i<n;i++) members[i]=cnt[groupNum[i]];
+  var renum=Object.create(null), gg=0, groupId=new Array(n), cls=new Array(n), score=new Float32Array(n), dup=0, seenG=Object.create(null);
+  for(var i=0;i<n;i++){ if(members[i]<2){ groupId[i]=""; cls[i]="Unique"; score[i]=0; continue; }
+    if(!(groupNum[i] in renum)) renum[groupNum[i]]=++gg;
+    groupId[i]="G-"+String(renum[groupNum[i]]).padStart(5,"0");
+    var s=best[i]; score[i]=s; cls[i]= s>=0.95?"Certain": s>=0.88?"Likely":"Review";
+    if(!seenG[groupNum[i]]){ seenG[groupNum[i]]=1; dup++; } }
+  postMessage({type:"progress", pct:100});
+  nmiss.sort(function(a,b){ return b[2]-a[2]; });
+  postMessage({type:"done", groupId:groupId, score:Array.from(score), cls:cls,
+    members:Array.from(members), groupNum:Array.from(groupNum),
+    comparisons:comparisons, dupGroups:dup, skipped:skipped,
+    review:nmiss.slice(0,500).map(function(p){return [p[0],p[1],p[2]];}), reviewTotal:nmiss.length, reviewTrunc:nmTrunc});
+}
+onmessage=function(e){ FOLD=(e.data.fold!==false); run(e.data.names, e.data.threshold, e.data.theta); };
+
+</script>
+
+<!-- ===================== MAIN ===================== -->
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var state={ wb:null, ws:null, sheetName:null, aoa:null, names:[], rowIdx:[], header:false, res:null,
+    theta:0.90, order:[], filter:"all", search:"", page:0, perPage:200 };
+
+  // ---------- file load ----------
+  var drop=$("drop"), fileEl=$("file");
+  drop.addEventListener("click",function(){fileEl.click();});
+  drop.addEventListener("dragover",function(e){e.preventDefault();drop.classList.add("over");});
+  drop.addEventListener("dragleave",function(){drop.classList.remove("over");});
+  drop.addEventListener("drop",function(e){e.preventDefault();drop.classList.remove("over");
+    if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);});
+  fileEl.addEventListener("change",function(){ if(fileEl.files[0]) loadFile(fileEl.files[0]); });
+  $("reset").addEventListener("click",function(){ location.reload(); });
+
+  function loadFile(file){
+    if(typeof XLSX==="undefined"){ alert("The spreadsheet library failed to initialise. Please re-download the tool file."); return; }
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var data=new Uint8Array(rd.result);
+        var wb=XLSX.read(data,{type:"array"});
+        var sn=wb.SheetNames[0], ws=wb.Sheets[sn];
+        var aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+        state.wb=wb; state.ws=ws; state.sheetName=sn; state.aoa=aoa;
+        var first=(aoa[0]&&aoa[0][0]!=null)?String(aoa[0][0]):"";
+        state.header=/full\s*name/i.test(first);
+        $("hdr").checked=state.header;
+        $("fname").textContent=file.name;
+        rebuildNames();
+        drop.classList.add("hidden"); $("loaded").classList.remove("hidden");
+        $("settings").classList.remove("hidden"); $("results").classList.add("hidden");
+      }catch(err){ alert("Could not read the file. Make sure it is a valid .xlsx, .xls or .csv with names in column A."); }
+    };
+    rd.readAsArrayBuffer(file);
+  }
+  $("hdr").addEventListener("change",function(){ state.header=$("hdr").checked; rebuildNames(); });
+
+  function rebuildNames(){
+    var aoa=state.aoa, startSheetRow=state.header?1:0;
+    var names=[], rowIdx=[];
+    for(var r=startSheetRow;r<aoa.length;r++){
+      var v=(aoa[r]&&aoa[r][0]!=null)?String(aoa[r][0]).trim():"";
+      names.push(v); rowIdx.push(r);
+    }
+    state.names=names; state.rowIdx=rowIdx;
+    $("rowcount").textContent=names.length.toLocaleString()+" rows · column A";
+  }
+
+  // ---------- settings ----------
+  var th=$("th");
+  th.addEventListener("input",function(){ $("thv").textContent=Number(th.value).toFixed(2);
+    document.querySelectorAll("#bias button").forEach(function(b){ b.classList.toggle("on", b.dataset.v===th.value); }); });
+  document.querySelectorAll("#bias button").forEach(function(b){
+    b.addEventListener("click",function(){ th.value=b.dataset.v; $("thv").textContent=Number(b.dataset.v).toFixed(2);
+      state.theta=Number(b.dataset.theta);
+      document.querySelectorAll("#bias button").forEach(function(x){x.classList.remove("on");}); b.classList.add("on"); }); });
+
+  // ---------- run ----------
+  var worker=null;
+  $("run").addEventListener("click",function(){
+    if(!state.names.length){ alert("No rows loaded."); return; }
+    $("run").disabled=true; $("progwrap").classList.remove("hidden");
+    $("progbar").style.width="0%"; $("progpct").textContent="0%"; $("progtext").textContent="Comparing names…";
+    var src=$("worker-src").textContent;
+    var url=URL.createObjectURL(new Blob([src],{type:"application/javascript"}));
+    worker=new Worker(url);
+    worker.onmessage=function(e){
+      var d=e.data;
+      if(d.type==="progress"){ $("progbar").style.width=d.pct+"%"; $("progpct").textContent=d.pct+"%"; }
+      else if(d.type==="done"){ state.res=d; worker.terminate(); URL.revokeObjectURL(url);
+        $("run").disabled=false; $("progtext").textContent="Done."; renderResults(); }
+    };
+    worker.onerror=function(){ $("run").disabled=false; $("progtext").textContent="Error during processing."; };
+    worker.postMessage({ names:state.names, threshold:Number(th.value), theta:state.theta, fold:$("fold").checked });
+  });
+
+  // ---------- results ----------
+  function buildOrder(){
+    var res=state.res, n=state.names.length, idx=[];
+    for(var i=0;i<n;i++) idx.push(i);
+    idx.sort(function(a,b){
+      var ga=res.members[a]>1?0:1, gb=res.members[b]>1?0:1;
+      if(ga!==gb) return ga-gb;                       // groups first
+      if(res.groupNum[a]!==res.groupNum[b]) return res.groupNum[a]-res.groupNum[b];
+      return res.score[b]-res.score[a];               // within group, strongest first
+    });
+    state.order=idx;
+  }
+  function filtered(){
+    var res=state.res, out=[], q=state.search.toLowerCase(), onlydup=$("onlydup").checked;
+    for(var k=0;k<state.order.length;k++){ var i=state.order[k];
+      if(onlydup && res.members[i]<2) continue;
+      if(state.filter!=="all" && res.cls[i]!==state.filter) continue;
+      if(q && state.names[i].toLowerCase().indexOf(q)<0) continue;
+      out.push(i);
+    } return out;
+  }
+  function renderResults(){
+    var res=state.res, n=state.names.length, dupRows=0;
+    for(var i=0;i<n;i++) if(res.members[i]>1) dupRows++;
+    $("mRows").textContent=n.toLocaleString();
+    $("mGroups").textContent=res.dupGroups.toLocaleString();
+    $("mDupRows").textContent=dupRows.toLocaleString();
+    $("mComp").textContent=res.comparisons.toLocaleString();
+    if(res.skipped>0){ var sn=$("skipnote"); sn.classList.remove("hidden");
+      sn.textContent="Note: "+res.skipped+" very large block(s) were skipped to keep processing bounded. This can happen with extremely common name fragments. Lower the threshold or clean obvious noise if you suspect missed matches."; }
+    buildOrder(); state.page=0; $("results").classList.remove("hidden"); renderTable();
+    renderReview();
+    $("results").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function renderTable(){
+    var res=state.res, list=filtered(), per=state.perPage, pages=Math.max(1,Math.ceil(list.length/per));
+    if(state.page>=pages) state.page=pages-1; if(state.page<0) state.page=0;
+    var start=state.page*per, slice=list.slice(start,start+per);
+    var tb=$("tbody"); tb.innerHTML="";
+    var lastG=-1, band=false;
+    slice.forEach(function(i){
+      if(res.groupNum[i]!==lastG){ band=!band; lastG=res.groupNum[i]; }
+      var tr=document.createElement("tr");
+      if(res.members[i]>1 && band) tr.className="band";
+      var sc=res.score[i]>0?res.score[i].toFixed(3):"—";
+      tr.innerHTML='<td class="g">'+(res.groupId[i]||"—")+'</td>'+
+        '<td>'+esc(state.names[i]||"(empty)")+'</td>'+
+        '<td class="s">'+sc+'</td>'+
+        '<td><span class="tag '+res.cls[i]+'">'+res.cls[i]+'</span></td>'+
+        '<td class="m">'+res.members[i]+'</td>';
+      tb.appendChild(tr);
+    });
+    $("pageinfo").textContent=list.length.toLocaleString()+" rows · page "+(state.page+1)+" of "+pages;
+    $("prev").disabled=state.page<=0; $("next").disabled=state.page>=pages-1;
+  }
+  function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+
+  function renderReview(){
+    var res=state.res, rv=(res.review)||[], box=$("reviewBox"), body=$("reviewBody");
+    if(!rv.length){ box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    var shown=rv.length, total=res.reviewTotal||shown;
+    $("reviewCount").textContent="("+ (total>shown? "top "+shown+" of "+total.toLocaleString() : shown+(shown===1?" pair":" pairs")) +")";
+    body.innerHTML="";
+    rv.forEach(function(p){ var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+esc(state.names[p[0]]||"(empty)")+'</td>'+
+                   '<td>'+esc(state.names[p[1]]||"(empty)")+'</td>'+
+                   '<td class="s">'+p[2].toFixed(3)+'</td>';
+      body.appendChild(tr); });
+  }
+
+  document.querySelectorAll(".filt").forEach(function(p){ p.addEventListener("click",function(){
+    document.querySelectorAll(".filt").forEach(function(x){x.classList.remove("on");}); p.classList.add("on");
+    state.filter=p.dataset.f; state.page=0; renderTable(); }); });
+  $("search").addEventListener("input",function(){ state.search=$("search").value; state.page=0; renderTable(); });
+  $("onlydup").addEventListener("change",function(){ state.page=0; renderTable(); });
+  $("prev").addEventListener("click",function(){ state.page--; renderTable(); });
+  $("next").addEventListener("click",function(){ state.page++; renderTable(); });
+
+  // ---------- export ----------
+  $("export").addEventListener("click",function(){
+    if(!state.res){ return; }
+    var res=state.res, ws=state.ws;
+    var range=XLSX.utils.decode_range(ws["!ref"]||"A1");
+    function setCell(r,c,v,isNum){ var addr=XLSX.utils.encode_cell({r:r,c:c});
+      ws[addr]= isNum ? {t:"n",v:v} : {t:"s",v:String(v)};
+      if(r>range.e.r) range.e.r=r; if(c>range.e.c) range.e.c=c; }
+    if(state.header){ var h=state.rowIdx.length?Math.min.apply(null,state.rowIdx)-1:0; if(h<0)h=0;
+      setCell(h,1,"Group ID"); setCell(h,2,"Score"); setCell(h,3,"Match"); setCell(h,4,"Members"); }
+    for(var k=0;k<state.rowIdx.length;k++){ var r=state.rowIdx[k];
+      setCell(r,1, res.groupId[k]||"");
+      if(res.score[k]>0) setCell(r,2, Number(res.score[k].toFixed(3)), true); else setCell(r,2,"");
+      setCell(r,3, res.cls[k]);
+      setCell(r,4, res.members[k], true);
+    }
+    ws["!ref"]=XLSX.utils.encode_range(range);
+    if(state.res && state.res.review && state.res.review.length){
+      var raoa=[["Name","Possible match","Score"]];
+      state.res.review.forEach(function(p){ raoa.push([state.names[p[0]]||"", state.names[p[1]]||"", Number(p[2].toFixed(3))]); });
+      var rws=XLSX.utils.aoa_to_sheet(raoa);
+      if(state.wb.SheetNames.indexOf("review_candidates")<0) XLSX.utils.book_append_sheet(state.wb, rws, "review_candidates");
+      else state.wb.Sheets["review_candidates"]=rws;
+    }
+    XLSX.writeFile(state.wb, "names_with_groups.xlsx");
+  });
+})();
+</script>
+</body>
+</html>
