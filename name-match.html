@@ -213,7 +213,7 @@ a{color:var(--accent)}
         <p style="font-size:14px;font-weight:600;margin:0">Review candidates</p>
         <span id="reviewCount" style="font-size:12.5px;color:var(--muted)"></span>
       </div>
-      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">Pairs that scored just below the match threshold, so they were <em>not</em> merged. These are the genuinely ambiguous cases — e.g. an added middle name, or a shared surname with partial overlap. Inspect and decide for yourself; lower the threshold (or pick Recall) if you want them grouped.</p>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">Pairs that scored just below the match threshold, so they were <em>not</em> merged. These are the genuinely ambiguous cases — e.g. an added middle name, or a shared surname with partial overlap. Inspect and decide for yourself; lower the threshold (or pick Recall) if you want them grouped. Entries scoring at or above the threshold are phonetic transliteration-type candidates (e.g. Juha/Juho) deliberately left for human judgement.</p>
       <div class="tbl-wrap">
         <table>
           <colgroup><col><col><col style="width:80px"></colgroup>
@@ -225,7 +225,7 @@ a{color:var(--accent)}
   </section>
 
   <p class="foot">
-    Method: each name is lowercased, accents are optionally folded (Unicode NFD, e.g. ä→a, ö→o, ü→u, with explicit rules for ß→ss, ø→o, æ→ae), name particles are merged (al, van, de, mc, … so “Al-Sayed” and “Alsayed” agree), and the name is split into tokens; single-letter initials are ignored for scoring. Records are compared regardless of word order using Soft TF-IDF: token similarity is Jaro–Winkler, and each token is weighted by its corpus rarity (IDF), so common names contribute little and distinctive names dominate. Candidate pairs are restricted by automatic blocking (shared exact tokens and shared two-token prefixes), so the tool scales to large files without comparing every pair. Grouping uses chaining-resistant star clustering: each group forms around a seed and a record joins only if it is similar to that seed, which prevents distinct people from being chained into one large cluster. Score is the strongest similarity linking a row to its group: Certain ≥ 0.95, Likely ≥ 0.88, Review ≥ threshold.<br>
+    Method: each name is lowercased, accents are optionally folded (Unicode NFD, e.g. ä→a, ö→o, ü→u, with explicit rules for ß→ss, ø→o, æ→ae), name particles are merged (al, van, de, mc, … so “Al-Sayed” and “Alsayed” agree), and the name is split into tokens; single-letter initials are ignored for scoring. Records are compared regardless of word order using Soft TF-IDF: token similarity is Jaro–Winkler, and each token is weighted by its corpus rarity (IDF), so common names contribute little and distinctive names dominate. Candidate pairs are restricted by automatic blocking (shared exact tokens and shared two-token prefixes), so the tool scales to large files without comparing every pair. Known transliteration variants of the same name are normalised with a small verified lexicon (e.g. Muhammad/Mohammed/Mohamed) so they match exactly. Token pairs that are phonetically equivalent under an Editex-style vowel/consonant-group comparison but not in the lexicon (e.g. Juha/Juho) are never auto-merged; the pair is surfaced at the top of the review list for human judgement. Grouping uses chaining-resistant star clustering: each group forms around a seed and a record joins only if it is similar to that seed, which prevents distinct people from being chained into one large cluster. Score is the strongest similarity linking a row to its group: Certain ≥ 0.95, Likely ≥ 0.88, Review ≥ threshold.<br>
     References: Christen, P. (2012). <em>Data Matching.</em> Springer. · Cohen, W. W., Ravikumar, P., &amp; Fienberg, S. E. (2003). A comparison of string distance metrics for name-matching tasks. <em>IIWeb-03</em>, 73–78.
   </p>
 </div>
@@ -249,7 +249,9 @@ function mergeParticles(toks){ var out=[],i=0,n=toks.length;
   return out; }
 function stoks(name){ var t=normalize(name); if(!t) return [];
   t=mergeParticles(t.split(" ").filter(Boolean));
-  return t.filter(function(x){return x.length>1;}); }
+  t=t.filter(function(x){return x.length>1;});
+  for(var i2=0;i2<t.length;i2++){ var c=CANON[t[i2]]; if(c) t[i2]=c; }
+  return t; }
 // Jaro-Winkler with reused scratch buffers + charCode compare (allocation-free hot path)
 var SCRATCH=128, MA=new Uint8Array(SCRATCH), MB=new Uint8Array(SCRATCH);
 function jw_slow(a,b){ if(a===b) return 1; if(!a.length||!b.length) return 0;
@@ -274,6 +276,39 @@ function jw(a,b){ if(a===b) return 1; var la=a.length, lb=b.length; if(!la||!lb)
   var jaro=(m/la+m/lb+(m-t)/m)/3;
   var p=0,mp=la<lb?la:lb; if(mp>4)mp=4; while(p<mp&&a.charCodeAt(p)===b.charCodeAt(p))p++;
   return jaro+p*0.1*(1-jaro); }
+
+// ---- starter transliteration lexicon (same-name romanizations only; verify source before thesis use) ----
+var CANON={"muhammad":"mohammed","mohamed":"mohammed","mohamad":"mohammed","muhammed":"mohammed","mohammad":"mohammed",
+ "hussain":"hussein","husain":"hussein","husayn":"hussein","hossein":"hussein",
+ "hasan":"hassan","ahmad":"ahmed","khaled":"khalid","aly":"ali","umar":"omar",
+ "ibraheem":"ibrahim","yousef":"yusuf","youssef":"yusuf","yusef":"yusuf",
+ "moustafa":"mustafa","mustapha":"mustafa","fatma":"fatima","fatimah":"fatima",
+ "osman":"othman","usman":"othman","uthman":"othman"};
+// ---- Editex-style phonetic-group similarity (review gate for unlisted transliteration variants) ----
+var PHGROUP=Object.create(null);
+(function(){ var groups=["aeiouy","bp","ckq","dt","lr","mn","gj","fv","sxz"];
+  for(var g=0; g<groups.length; g++) for(var i=0;i<groups[g].length;i++){
+    var c=groups[g][i]; (PHGROUP[c]||(PHGROUP[c]=[])).push(g); } })();
+function phSameGroup(a,b){ var ga=PHGROUP[a], gb=PHGROUP[b];
+  if(!ga||!gb) return false;
+  for(var i=0;i<ga.length;i++) for(var j=0;j<gb.length;j++) if(ga[i]===gb[j]) return true;
+  return false; }
+function phDelCost(s,i){ var c=s[i];
+  if(i>0 && s[i-1]===c) return 0.2;
+  if(i+1<s.length && s[i+1]===c) return 0.2;
+  return "aeiouy".indexOf(c)>=0 ? 0.6 : 1.0; }
+function phsim(a,b){ var la=a.length, lb=b.length;
+  if(!la||!lb) return 0; if(a===b) return 1;
+  var prev=new Float64Array(lb+1), cur=new Float64Array(lb+1);
+  prev[0]=0; for(var j=1;j<=lb;j++) prev[j]=prev[j-1]+phDelCost(b,j-1);
+  for(var i=1;i<=la;i++){ cur[0]=prev[0]+phDelCost(a,i-1); var ca=a[i-1];
+    for(var j=1;j<=lb;j++){ var cb=b[j-1];
+      var sub = ca===cb?0:(phSameGroup(ca,cb)?0.4:1.0);
+      var v1=prev[j-1]+sub, v2=prev[j]+phDelCost(a,i-1), v3=cur[j-1]+phDelCost(b,j-1);
+      cur[j]=v1<v2?(v1<v3?v1:v3):(v2<v3?v2:v3); }
+    var t=prev; prev=cur; cur=t; }
+  return 1 - prev[lb]/Math.max(la,lb); }
+
 function blockKeys(st){ var t=Array.from(new Set(st)).sort(), keys=[]; if(!t.length) return keys;
   for(var i=0;i<t.length;i++) keys.push("T:"+t[i]);
   if(t.length>=2){ var p=t.map(function(x){return x.slice(0,3);}); var lim=Math.min(t.length,3);
@@ -282,6 +317,8 @@ function blockKeys(st){ var t=Array.from(new Set(st)).sort(), keys=[]; if(!t.len
 var THETA=0.90;
 function run(names, threshold, theta){
   theta=(theta!==undefined?theta:THETA);
+  var PHMODE="review", PH_JW_FLOOR=0.70, PH_MIN=0.85;
+  var simFloor=Math.min(theta,PH_JW_FLOOR);
   var MAXBUCKET=2500, n=names.length;
   var reviewFloor=Math.max(0.60, threshold-0.15), nmiss=[], nmTrunc=false, NMCAP=200000;
   var toks=new Array(n), uniq=new Array(n);
@@ -296,18 +333,28 @@ function run(names, threshold, theta){
     for(var k=0;k<u.length;k++){ var ii=id[u[k]]; a[k]=ii; L[k]=u[k].length; var v=idf[ii]; w[k]=v; ss+=v*v; }
     var nm=Math.sqrt(ss)||1; for(var k=0;k<w.length;k++) w[k]/=nm; uid[i]=a; ulen[i]=L; W[i]=w; }
   var RB=new Float64Array(32), RW=new Float64Array(32), CB=new Float64Array(32), CW=new Float64Array(32);
+  var GB=new Float64Array(32), GW=new Float64Array(32), DB=new Float64Array(32), DW=new Float64Array(32);
   // each token-pair jw computed once; both directions derived; length pre-filter skips unreachable cells
   function sim(i,j){
     var ua=uid[i], la=ulen[i], wa=W[i], ub2=uid[j], lb=ulen[j], wb=W[j], na=ua.length, nb=ub2.length;
-    for(var x=0;x<na;x++){ RB[x]=0; RW[x]=0; } for(var y=0;y<nb;y++){ CB[y]=0; CW[y]=0; }
+    for(var x=0;x<na;x++){ RB[x]=0; RW[x]=0; GB[x]=0; GW[x]=0; }
+    for(var y=0;y<nb;y++){ CB[y]=0; CW[y]=0; DB[y]=0; DW[y]=0; }
     for(var x=0;x<na;x++){ var lax=la[x], sax=id2s[ua[x]];
       for(var y=0;y<nb;y++){ var lby=lb[y], mn=lax<lby?lax:lby, mx=lax>lby?lax:lby;
-        if(0.6*((2+mn/mx)/3)+0.4 < theta) continue;
+        if(0.6*((2+mn/mx)/3)+0.4 < simFloor) continue;
         var v=jw(sax,id2s[ub2[y]]);
-        if(v>RB[x]){ RB[x]=v; RW[x]=wb[y]; } if(v>CB[y]){ CB[y]=v; CW[y]=wa[x]; } } }
+        var vg=v;
+        if(v<theta && v>=PH_JW_FLOOR){
+          var pv=phsim(sax,id2s[ub2[y]]);
+          if(pv>=PH_MIN) vg=theta;            // phonetically equivalent but unverified -> review only
+        }
+        if(v>RB[x]){ RB[x]=v; RW[x]=wb[y]; } if(v>CB[y]){ CB[y]=v; CW[y]=wa[x]; }
+        if(vg>GB[x]){ GB[x]=vg; GW[x]=wb[y]; } if(vg>DB[y]){ DB[y]=vg; DW[y]=wa[x]; } } }
     var dab=0; for(var x=0;x<na;x++){ if(RB[x]>=theta) dab+=wa[x]*RW[x]*RB[x]; }
     var dba=0; for(var y=0;y<nb;y++){ if(CB[y]>=theta) dba+=wb[y]*CW[y]*CB[y]; }
-    return (dab+dba)/2; }
+    var gab=0; for(var x=0;x<na;x++){ if(GB[x]>=theta) gab+=wa[x]*GW[x]*GB[x]; }
+    var gba=0; for(var y=0;y<nb;y++){ if(DB[y]>=theta) gba+=wb[y]*DW[y]*DB[y]; }
+    return {p:(dab+dba)/2, g:(gab+gba)/2}; }
   var buckets=Object.create(null);
   for(var i=0;i<n;i++){ var ks=blockKeys(toks[i]); for(var k=0;k<ks.length;k++){ (buckets[ks[k]]||(buckets[ks[k]]=[])).push(i); } }
   var adj=new Array(n); for(var i=0;i<n;i++) adj[i]=[];
@@ -320,8 +367,9 @@ function run(names, threshold, theta){
         var i=arr[x], j=arr[y]; var lo=i<j?i:j, hi=i<j?j:i, pk=lo*n+hi;
         var sh=seen[hi&(SH-1)]; if(sh.has(pk)) continue; sh.add(pk); comparisons++;
         var sc=sim(i,j);
-        if(sc>=threshold){ adj[i].push([j,sc]); adj[j].push([i,sc]); }
-        else if(sc>=reviewFloor){ if(nmiss.length<NMCAP) nmiss.push([i,j,sc]); else nmTrunc=true; } } }
+        if(sc.p>=threshold){ adj[i].push([j,sc.p]); adj[j].push([i,sc.p]); }
+        else if(sc.g>=threshold){ if(nmiss.length<NMCAP) nmiss.push([i,j,sc.g]); else nmTrunc=true; }
+        else if(sc.p>=reviewFloor){ if(nmiss.length<NMCAP) nmiss.push([i,j,sc.p]); else nmTrunc=true; } } }
     if(b%step===0) postMessage({type:"progress", pct:Math.round(b/total*85)}); }
   postMessage({type:"progress", pct:88});
   var order=new Array(n); for(var i=0;i<n;i++) order[i]=i;
