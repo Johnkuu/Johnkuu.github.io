@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paikallinen litterointi</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66;
+    --line: #dcdad4; --accent: #1f5f8b; --accent-ink: #ffffff; --warn: #8a4b00; --err: #a1261d;
+    --bar: #e7e5df;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1e; --ink: #ecebe7; --muted: #a09f9a;
+      --line: #383733; --accent: #6aa9d6; --accent-ink: #0d1a24; --warn: #e0a24f; --err: #f08a80;
+      --bar: #2c2b29;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .row > div { flex: 1 1 220px; }
+  select, input[type=file] { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); font: inherit; }
+  button { padding: 9px 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--ink); font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: .88rem; margin-top: 6px; }
+  .progress { height: 8px; background: var(--bar); border-radius: 4px; overflow: hidden; margin: 10px 0 6px; }
+  .progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #status { font-size: .92rem; min-height: 1.4em; }
+  #status.err { color: var(--err); }
+  #status.warn { color: var(--warn); }
+  textarea { width: 100%; min-height: 380px; padding: 12px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); }
+  ul { margin: 6px 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Paikallinen litterointi</h1>
+  <p class="sub">Whisper-puheentunnistus selaimessa. Äänitiedosto käsitellään omalla koneella, sitä ei lähetetä minnekään.
+    Vain malli ladataan kerran internetistä (Hugging Face).</p>
+
+  <section class="panel">
+    <div class="row">
+      <div>
+        <label for="file">Äänitiedosto</label>
+        <input id="file" type="file" accept=".m4a,.mp3,.wav,.ogg,.webm,.aac,.flac,audio/*">
+      </div>
+      <div>
+        <label for="model">Malli</label>
+        <select id="model">
+          <option value="onnx-community/whisper-large-v3-turbo">Large v3 turbo – paras tarkkuus suomelle (lataus ~1–2 Gt, vaatii WebGPU:n)</option>
+          <option value="onnx-community/whisper-small" selected>Small – kompromissi (lataus ~250 Mt)</option>
+          <option value="onnx-community/whisper-base">Base – nopea, heikko suomessa (lataus ~80 Mt)</option>
+        </select>
+      </div>
+      <div>
+        <label for="lang">Kieli</label>
+        <select id="lang">
+          <option value="finnish" selected>suomi</option>
+          <option value="swedish">ruotsi</option>
+          <option value="english">englanti</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint" id="envinfo"></p>
+    <div class="actions">
+      <button id="start" class="primary" disabled>Litteroi</button>
+      <button id="stop" disabled>Keskeytä</button>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+    <div id="status">Valitse tiedosto.</div>
+  </section>
+
+  <section class="panel">
+    <label for="out">Litteraatti (muokattavissa, esim. puhujakoodit H1, H2 …)</label>
+    <textarea id="out" spellcheck="false" placeholder="[00:00:00 → 00:00:07] Teksti ilmestyy tähän …"></textarea>
+    <div class="actions">
+      <button id="dlTxt" disabled>Lataa .txt</button>
+      <button id="dlSrt" disabled>Lataa .srt</button>
+      <button id="copy" disabled>Kopioi</button>
+    </div>
+    <details>
+      <summary>Rajoitukset ja ohjeet</summary>
+      <ul>
+        <li>Ei puhujien automaattista erottelua. Lisää puhujakoodit käsin tekstikenttään ennen latausta.</li>
+        <li>Tarkista litteraatti aina kuuntelemalla. Virheitä erityisesti päällekkäispuheessa, murteissa ja erisnimissä.</li>
+        <li>Whisper voi "keksiä" tekstiä hiljaisiin kohtiin (hallusinaatio). Hiljaiset jaksot ohitetaan, mutta tarkista silti.</li>
+        <li>Paras selain: Chrome tai Edge (WebGPU). Firefox voi epäonnistua .m4a-tiedoston purussa.</li>
+        <li>Pidä välilehti auki ja aktiivisena koko litteroinnin ajan.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<script type="module">
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
+
+env.allowLocalModels = false;
+try { if (typeof caches === 'undefined') env.useBrowserCache = false; } catch { env.useBrowserCache = false; }
+
+const SR = 16000;          // Whisper odottaa 16 kHz
+const WIN = 30;            // ikkunan maksimipituus (s)
+const SEARCH = 4;          // hiljaisimman leikkauskohdan hakualue ikkunan lopussa (s)
+const SILENCE_RMS = 0.004; // tätä hiljaisemmat ikkunat ohitetaan
+
+const $ = id => document.getElementById(id);
+const fileEl = $('file'), startEl = $('start'), stopEl = $('stop'), statusEl = $('status'), barEl = $('bar');
+const outEl = $('out');
+let segments = [];
+let cancel = false;
+let transcriber = null, loadedKey = null;
+
+const hasWebGPU = !!navigator.gpu;
+let hasF16 = false;
+(async () => {
+  if (hasWebGPU) {
+    try { const a = await navigator.gpu.requestAdapter(); hasF16 = !!a && a.features.has('shader-f16'); } catch {}
+  }
+  $('envinfo').textContent = hasWebGPU
+    ? `WebGPU käytössä${hasF16 ? ' (fp16-tuki)' : ''}: litterointi nopeaa.`
+    : 'WebGPU ei käytössä: käytetään prosessoria (hidas). Large-malli ei suositeltava. Kokeile Chromea tai Edgeä.';
+})();
+
+function setStatus(msg, cls = '') { statusEl.textContent = msg; statusEl.className = cls; }
+function setBar(p) { barEl.style.width = `${Math.max(0, Math.min(100, p))}%`; }
+
+function fmt(t, srt = false) {
+  t = Math.max(0, t);
+  const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = Math.floor(t % 60);
+  const ms = Math.round((t - Math.floor(t)) * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return srt ? `${p(h)}:${p(m)}:${p(s)},${String(ms).padStart(3, '0')}` : `${p(h)}:${p(m)}:${p(s)}`;
+}
+
+function render() {
+  outEl.value = segments.map(s => `[${fmt(s.start)} → ${fmt(s.end)}] ${s.text}`).join('\n');
+  outEl.scrollTop = outEl.scrollHeight;
+  const any = segments.length > 0;
+  ['dlTxt', 'dlSrt', 'copy'].forEach(id => $(id).disabled = !any);
+}
+
+fileEl.addEventListener('change', () => {
+  startEl.disabled = !fileEl.files.length;
+  if (fileEl.files.length) setStatus(`Valittu: ${fileEl.files[0].name} (${(fileEl.files[0].size / 1e6).toFixed(1)} Mt)`);
+});
+
+async function decodeTo16k(file) {
+  const buf = await file.arrayBuffer();
+  const ctx = new AudioContext();
+  let audio;
+  try { audio = await ctx.decodeAudioData(buf); }
+  catch { throw new Error('Tiedoston purku epäonnistui. Kokeile Chromea/Edgeä tai muunna tiedosto .wav- tai .mp3-muotoon.'); }
+  finally { ctx.close(); }
+  const off = new OfflineAudioContext(1, Math.ceil(audio.duration * SR), SR);
+  const src = off.createBufferSource();
+  src.buffer = audio; src.connect(off.destination); src.start();
+  const rendered = await off.startRendering();
+  return rendered.getChannelData(0);
+}
+
+function rms(a, from, to) {
+  let s = 0; for (let i = from; i < to; i++) s += a[i] * a[i];
+  return Math.sqrt(s / Math.max(1, to - from));
+}
+
+// Pilkotaan ääni ≤30 s paloihin; leikkaus hiljaisimpaan kohtaan, jotta sanat eivät katkea.
+function makeChunks(a) {
+  const chunks = []; const winN = WIN * SR, searchN = SEARCH * SR, step = Math.round(0.1 * SR);
+  let pos = 0;
+  while (pos < a.length) {
+    let end = Math.min(pos + winN, a.length);
+    if (end < a.length) {
+      let best = end, bestE = Infinity;
+      for (let i = end - searchN; i + step <= end; i += step) {
+        const e = rms(a, i, i + step);
+        if (e < bestE) { bestE = e; best = i + Math.floor(step / 2); }
+      }
+      end = best;
+    }
+    chunks.push([pos, end]); pos = end;
+  }
+  return chunks;
+}
+
+async function loadModel(model) {
+  const device = hasWebGPU ? 'webgpu' : 'wasm';
+  const dtype = hasWebGPU
+    ? { encoder_model: hasF16 ? 'fp16' : 'fp32', decoder_model_merged: 'q4' }
+    : 'q8';
+  const key = `${model}|${device}|${JSON.stringify(dtype)}`;
+  if (transcriber && loadedKey === key) return;
+  const files = {};
+  setStatus('Ladataan mallia … (vain ensimmäisellä kerralla)');
+  transcriber = await pipeline('automatic-speech-recognition', model, {
+    device, dtype,
+    progress_callback: p => {
+      if (p.status === 'progress' && p.total) {
+        files[p.file] = [p.loaded, p.total];
+        const [l, t] = Object.values(files).reduce((acc, [a, b]) => [acc[0] + a, acc[1] + b], [0, 0]);
+        setBar(l / t * 100);
+        setStatus(`Ladataan mallia … ${(l / 1e6).toFixed(0)} / ${(t / 1e6).toFixed(0)} Mt`);
+      }
+    }
+  });
+  loadedKey = key;
+}
+
+startEl.addEventListener('click', async () => {
+  const file = fileEl.files[0]; if (!file) return;
+  cancel = false; segments = []; render();
+  startEl.disabled = true; stopEl.disabled = false; fileEl.disabled = true;
+  try {
+    setBar(0);
+    await loadModel($('model').value);
+    setStatus('Puretaan äänitiedostoa …'); setBar(0);
+    const audio = await decodeTo16k(file);
+    const chunks = makeChunks(audio);
+    const total = audio.length / SR;
+    const t0 = performance.now();
+    for (let i = 0; i < chunks.length; i++) {
+      if (cancel) { setStatus('Keskeytetty. Tähänastinen litteraatti säilyy.', 'warn'); break; }
+      const [a, b] = chunks[i];
+      const offset = a / SR, dur = (b - a) / SR;
+      if (rms(audio, a, b) >= SILENCE_RMS) {
+        const res = await transcriber(audio.subarray(a, b), {
+          language: $('lang').value, task: 'transcribe', return_timestamps: true
+        });
+        const parts = res.chunks?.length ? res.chunks : [{ timestamp: [0, dur], text: res.text }];
+        for (const c of parts) {
+          const text = (c.text || '').trim();
+          if (!text) continue;
+          const s = offset + (c.timestamp?.[0] ?? 0);
+          const e = offset + (c.timestamp?.[1] ?? dur);
+          segments.push({ start: s, end: Math.max(s, Math.min(e, offset + dur)), text });
+        }
+        render();
+      }
+      const done = b / SR, el = (performance.now() - t0) / 1000;
+      const eta = done > 0 ? el / done * (total - done) : 0;
+      setBar(done / total * 100);
+      setStatus(`Litteroitu ${fmt(done)} / ${fmt(total)} · arvioitu jäljellä ${fmt(eta)}`);
+    }
+    if (!cancel) setStatus(`Valmis. ${segments.length} jaksoa. Tarkista teksti kuuntelemalla.`);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Virhe: ${err.message || err}`, 'err');
+  } finally {
+    startEl.disabled = false; stopEl.disabled = true; fileEl.disabled = false;
+  }
+});
+
+stopEl.addEventListener('click', () => { cancel = true; stopEl.disabled = true; setStatus('Keskeytetään nykyisen jakson jälkeen …', 'warn'); });
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const base = () => (fileEl.files[0]?.name || 'litteraatti').replace(/\.[^.]+$/, '');
+
+$('dlTxt').addEventListener('click', () => download(`${base()}.txt`, outEl.value));
+$('dlSrt').addEventListener('click', () => {
+  // Rakennetaan SRT tekstikentästä, jotta käsin tehdyt muutokset (esim. puhujakoodit) säilyvät.
+  const re = /^\[(\d\d):(\d\d):(\d\d) → (\d\d):(\d\d):(\d\d)\]\s?(.*)$/;
+  const lines = outEl.value.split('\n').map(l => l.match(re)).filter(Boolean);
+  const srt = lines.map((m, i) => {
+    const s = +m[1] * 3600 + +m[2] * 60 + +m[3], e = +m[4] * 3600 + +m[5] * 60 + +m[6];
+    return `${i + 1}\n${fmt(s, true)} --> ${fmt(Math.max(e, s + 1), true)}\n${m[7]}\n`;
+  }).join('\n');
+  download(`${base()}.srt`, srt);
+});
+$('copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(outEl.value); setStatus('Kopioitu leikepöydälle.'); }
+  catch { outEl.select(); document.execCommand('copy'); setStatus('Kopioitu leikepöydälle.'); }
+});
+</script>
+</body>
+</html>
